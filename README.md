@@ -42,29 +42,50 @@
 
 ---
 
-## 📦 Installation & Build Instructions
+## 📦 Installation & Usage
 
-### 1. Running Locally (Desktop - Windows/Linux/macOS)
+### Option 1: Run from Source Code (Python Required)
 
-**Prerequisites**: Python 3.10+, Git.
+This is the most flexible way for contributors or Python users.
 
+#### Prerequisites
+- Python 3.10+ installed
+- `pip` package manager
+
+#### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mounibwassim/RemindMe.git
+   ```
+2. Navigate to the project folder:
+   ```bash
+   cd RemindMe
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+#### Run
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/RemindMe.git
-cd RemindMe
-
-# Create Virtual Environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install Dependencies
-pip install -r requirements.txt
-
-# Run the Application
 python main.py
 ```
 
-### 2. Building for Android (APK)
+*Notes:*
+- Windows users may need to run as Administrator for notifications.
+- The app icon/logo will appear correctly in the taskbar and notifications (Windows only).
+
+### Option 2: Run Pre-Built Executable
+
+For non-technical users who just want the app running without installing Python.
+
+#### Download Pre-Built App
+For Windows users, download the latest executable from the [Releases](https://github.com/mounibwassim/RemindMe/releases) page.  
+Double-click `RemindMe_Windows.exe` to run. The app will appear in your taskbar with its logo and native notifications.
+
+*(Once the Android APK is ready, it will also be available on the Releases page.)*
+
+### Option 3: Building for Android (APK)
 
 This project uses **Buildozer** to package the application.
 

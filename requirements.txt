@@ -2,3 +2,5 @@ kivy==2.1.0
 kivymd==1.1.1
 pycryptodome
 pillow
+requests
+win10toast
