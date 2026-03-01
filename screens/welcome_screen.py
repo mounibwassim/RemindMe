@@ -133,6 +133,18 @@ class WelcomeScreen(MDScreen):
         # Extra safety bottom spacer
         content_box.add_widget(Widget(size_hint_y=None, height=dp(10)))
         
+        # VERSION BADGE
+        version_label = MDLabel(
+            text="v1.0.1",
+            halign="center",
+            font_style="Caption",
+            theme_text_color="Custom",
+            text_color=(1, 1, 1, 0.5),
+            size_hint_y=None,
+            height=dp(20)
+        )
+        content_box.add_widget(version_label)
+        
         glass_card.add_widget(content_box)
         self.add_widget(glass_card)
 

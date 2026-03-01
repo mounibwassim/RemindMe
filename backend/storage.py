@@ -89,6 +89,15 @@ def ensure_account(username: str, passphrase: str, create_if_missing: bool = Fal
         # VERY IMPORTANT: If the file did not exist locally (e.g. first compiled launch), guarantee the schema generates.
         if not os.path.exists(db_path):
             init_db_for(username, dek, path)
+        else:
+            # If the file exists but no tables are in it (empty DB glitch from PyInstaller), force schema generation
+            conn = sqlite3.connect(db_path)
+            cur = conn.cursor()
+            cur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'")
+            exists = cur.fetchone()
+            conn.close()
+            if not exists:
+                init_db_for(username, dek, path)
             
         # Ensure schema enhancements
         ensure_category_column(db_path)
