@@ -135,7 +135,7 @@ class WelcomeScreen(MDScreen):
         
         # VERSION BADGE
         version_label = MDLabel(
-            text="v1.0.7",
+            text="v1.0.8",
             halign="center",
             font_style="Caption",
             theme_text_color="Custom",

@@ -340,7 +340,7 @@ class CreateTaskScreen(MDScreen):
     def _do_show_date_picker(self):
         try:
             from kivy.core.window import Window
-            from kivymd.uix.picker import MDDatePicker
+            from kivymd.uix.pickers import MDDatePicker
             from datetime import datetime
 
             class ResponsiveDatePicker(MDDatePicker):
@@ -377,7 +377,7 @@ class CreateTaskScreen(MDScreen):
     def _do_show_time_picker(self):
         try:
             from kivy.core.window import Window
-            from kivymd.uix.picker import MDTimePicker
+            from kivymd.uix.pickers import MDTimePicker
 
             class ResponsiveTimePicker(MDTimePicker):
                 def _update_dialog_size(self):
