@@ -334,25 +334,21 @@ class CreateTaskScreen(MDScreen):
         self.time_btn.text = self.selected_time.strftime("%H:%M")
 
     def show_date_picker(self, instance):
-        from kivy.clock import Clock
-        Clock.schedule_once(lambda dt: self._do_show_date_picker(), 0.1)
-
-    def _do_show_date_picker(self):
         try:
+            from kivy.metrics import dp
             from kivy.core.window import Window
             from kivymd.uix.pickers import MDDatePicker
-            from datetime import datetime
-
-            class ResponsiveDatePicker(MDDatePicker):
-                def _update_dialog_size(self):
-                    # Limit width/height to fit mobile screens
-                    self.width = min(Window.width * 0.95, 400)
-                    self.height = min(Window.height * 0.8, 400)
-                    self.pos_hint = {"center_x": 0.5, "center_y": 0.5}
-
-            date_dialog = ResponsiveDatePicker(
-                primary_color=self.app.theme_cls.primary_color
+            
+            date_dialog = MDDatePicker(
+                primary_color=self.app.theme_cls.primary_color,
+                radius=[20, 20, 20, 20],
             )
+
+            # Force smaller size for mobile
+            date_dialog.size_hint = (None, None)
+            date_dialog.width = min(dp(330), Window.width * 0.95)
+            date_dialog.height = min(dp(420), Window.height * 0.85)
+
             date_dialog.bind(on_save=self.on_date_save)
             date_dialog.open()
         except Exception as e:
@@ -360,35 +356,28 @@ class CreateTaskScreen(MDScreen):
             self.show_error(f"Unable to open Date Picker: {e}")
 
     def on_date_save(self, instance, value, date_range):
-        try:
-            from datetime import datetime
-            if value < datetime.now().date():
-                self.show_error("Cannot select a past date.")
-                return
-            self.selected_date = value
-            self.update_dt_labels()
-        except Exception as e:
-            print("Error in on_date_save:", e)
+        from datetime import datetime
+        if value < datetime.now().date():
+            self.show_error("Cannot select a past date.")
+            return
+        self.selected_date = value
+        self.update_dt_labels()
 
     def show_time_picker(self, instance):
-        from kivy.clock import Clock
-        Clock.schedule_once(lambda dt: self._do_show_time_picker(), 0.1)
-
-    def _do_show_time_picker(self):
         try:
-            from kivy.core.window import Window
             from kivymd.uix.pickers import MDTimePicker
+            from kivy.metrics import dp
 
-            class ResponsiveTimePicker(MDTimePicker):
-                def _update_dialog_size(self):
-                    self.width = min(Window.width * 0.9, 300)
-                    self.height = min(Window.height * 0.5, 300)
-                    self.pos_hint = {"center_x": 0.5, "center_y": 0.5}
-
-            time_dialog = ResponsiveTimePicker(
-                primary_color=self.app.theme_cls.primary_color
-                # mode="spinner" # This was causing TypeError previously, disabling for safety
+            time_dialog = MDTimePicker(
+                primary_color=self.app.theme_cls.primary_color,
+                mode="dial"  # This shows clock with OK/Cancel
             )
+
+            # Force compact size
+            time_dialog.size_hint = (None, None)
+            time_dialog.width = dp(300)
+            time_dialog.height = dp(350)
+
             time_dialog.bind(on_save=self.on_time_save)
             time_dialog.open()
         except Exception as e:
