@@ -74,9 +74,6 @@ def ensure_account(username: str, passphrase: str, create_if_missing: bool = Fal
     if not metadata:
         raise ValueError("Account metadata missing from cloud.")
         
-    if not create_if_missing and not os.path.exists(db_path):
-        raise FileNotFoundError(f"Database file NOT FOUND in storage path: {db_path}. Auto-creation is strictly forbidden during packaged execution.")
-        
     try:
         salt_user = base64.b64decode(metadata["salt"])
         w_dek = metadata["wrapped_dek"]
@@ -89,6 +86,10 @@ def ensure_account(username: str, passphrase: str, create_if_missing: bool = Fal
         
         dek = decrypt_bytes(w_dek["ct"], w_dek["nonce"], user_key)
         
+        # VERY IMPORTANT: If the file did not exist locally (e.g. first compiled launch), guarantee the schema generates.
+        if not os.path.exists(db_path):
+            init_db_for(username, dek, path)
+            
         # Ensure schema enhancements
         ensure_category_column(db_path)
         ensure_sound_column(db_path)

@@ -298,6 +298,10 @@ class LoginScreen(MDScreen):
                 
                 try:
                     dek, db_path = ensure_account(username, pw, create_if_missing=False, path=self.app.storage_path, email=email, metadata=metadata)
+                except sqlite3.Error as sqle:
+                    print(f"CRITICAL SQLITE ERROR: {sqle}")
+                    self.show_error(f"Database initialization error: {str(sqle)}")
+                    return
                 except Exception as e:
                     print(f"DEBUG: Critical Local DB unlock failed: {e}")
                     self.show_error(f"Local Account Encryption Error: {str(e)}")
@@ -315,6 +319,11 @@ class LoginScreen(MDScreen):
             self.app.start_scheduler()
             self.app.switch_screen("dashboard")
             
+        except sqlite3.Error as e:
+            print("CRITICAL DATABASE LOOP ERROR:")
+            import traceback
+            traceback.print_exc()
+            self.show_error(f"Database schema failure: {str(e)}")
         except Exception as e:
             print("CRITICAL LOGIN ERROR:")
             import traceback
