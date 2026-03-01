@@ -337,106 +337,200 @@ class CreateTaskScreen(MDScreen):
         from kivymd.uix.dialog import MDDialog
         from kivymd.uix.button import MDFlatButton
         from kivymd.uix.gridlayout import MDGridLayout
+        from kivymd.uix.boxlayout import MDBoxLayout
         from kivymd.uix.label import MDLabel
         from kivy.metrics import dp
         from datetime import datetime
         import calendar
 
-        today = datetime.now()
-        month_days = calendar.monthrange(today.year, today.month)[1]
+        calendar.setfirstweekday(calendar.MONDAY)
+        today = datetime.now().date()
+        
+        # Internal state for navigation
+        self.view_month = self.selected_date.month
+        self.view_year = self.selected_date.year
+        self.temp_selected_date = self.selected_date
 
-        grid = MDGridLayout(
-            cols=7,
-            spacing=dp(8),
-            padding=dp(10),
-            size_hint_y=None,
-        )
-        grid.bind(minimum_height=grid.setter("height"))
+        main_layout = MDBoxLayout(orientation="vertical", spacing=dp(5), padding=dp(10), size_hint_y=None)
+        main_layout.bind(minimum_height=main_layout.setter("height"))
 
-        def select_day(day):
-            self.selected_date = datetime(today.year, today.month, day).date()
-            dialog.dismiss()
-            self.update_dt_labels()
+        # Header for navigation
+        header = MDBoxLayout(orientation="horizontal", size_hint_y=None, height=dp(40), spacing=dp(10))
+        prev_btn = MDFlatButton(text="<", on_release=lambda x: self._navigate_calendar(-1))
+        next_btn = MDFlatButton(text=">", on_release=lambda x: self._navigate_calendar(1))
+        self.month_year_label = MDLabel(text="", halign="center", bold=True, font_style="H6")
+        header.add_widget(prev_btn)
+        header.add_widget(self.month_year_label)
+        header.add_widget(next_btn)
+        main_layout.add_widget(header)
 
-        # Week headers
-        for d in ["Mo","Tu","We","Th","Fr","Sa","Su"]:
-            grid.add_widget(MDLabel(text=d, halign="center", font_style="Caption"))
+        # Weekdays row
+        weekdays_grid = MDGridLayout(cols=7, size_hint_y=None, height=dp(30))
+        for day in ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]:
+            weekdays_grid.add_widget(MDLabel(text=day, halign="center", font_style="Caption"))
+        main_layout.add_widget(weekdays_grid)
 
-        # Days
-        for day in range(1, month_days + 1):
-            btn = MDFlatButton(
-                text=str(day),
-                on_release=lambda x, d=day: select_day(d)
-            )
-            grid.add_widget(btn)
+        # Calendar grid
+        self.calendar_grid = MDGridLayout(cols=7, spacing=dp(2), size_hint_y=None)
+        self.calendar_grid.bind(minimum_height=self.calendar_grid.setter("height"))
+        main_layout.add_widget(self.calendar_grid)
 
-        dialog = MDDialog(
-            title=f"{calendar.month_name[today.month]} {today.year}",
+        self._update_calendar_ui()
+
+        self.date_dialog = MDDialog(
+            title="Select Date",
             type="custom",
-            content_cls=grid,
-            size_hint=(0.9, None),
-            height=dp(420),
+            content_cls=main_layout,
+            size_hint=(0.95, None),
+            height=dp(500),
             buttons=[
-                MDFlatButton(text="CANCEL", on_release=lambda x: dialog.dismiss())
+                MDFlatButton(text="CANCEL", on_release=lambda x: self.date_dialog.dismiss()),
+                MDFlatButton(text="OK", on_release=lambda x: self._confirm_date()),
             ],
         )
-        dialog.open()
+        self.date_dialog.open()
+
+    def _navigate_calendar(self, offset):
+        import calendar
+        self.view_month += offset
+        if self.view_month > 12:
+            self.view_month = 1
+            self.view_year += 1
+        elif self.view_month < 1:
+            self.view_month = 12
+            self.view_year -= 1
+        self._update_calendar_ui()
+
+    def _update_calendar_ui(self):
+        import calendar
+        from datetime import datetime
+        from kivymd.uix.button import MDFlatButton
+        from kivymd.uix.label import MDLabel
+        
+        today = datetime.now().date()
+        self.calendar_grid.clear_widgets()
+        self.month_year_label.text = f"{calendar.month_name[self.view_month]} {self.view_year}"
+        
+        cal = calendar.monthcalendar(self.view_year, self.view_month)
+        for week in cal:
+            for day in week:
+                if day == 0:
+                    self.calendar_grid.add_widget(MDLabel(text=""))
+                else:
+                    d_obj = datetime(self.view_year, self.view_month, day).date()
+                    is_today = (d_obj == today)
+                    is_selected = (d_obj == self.temp_selected_date)
+                    is_past = (d_obj < today)
+                    
+                    btn = MDFlatButton(
+                        text=str(day),
+                        theme_text_color="Custom" if is_selected or is_today else "Primary",
+                        text_color=self.app.theme_cls.primary_color if is_selected else ((0,0,0,1) if not is_past else (0.5,0.5,0.5,1)),
+                        disabled=is_past,
+                    )
+                    if is_selected:
+                         btn.md_bg_color = (self.app.theme_cls.primary_color[0], self.app.theme_cls.primary_color[1], self.app.theme_cls.primary_color[2], 0.2)
+                    elif is_today:
+                         btn.md_bg_color = (0,0,0,0.1)
+                    
+                    btn.bind(on_release=lambda x, d=day: self._select_day(d))
+                    self.calendar_grid.add_widget(btn)
+
+    def _select_day(self, day):
+        from datetime import datetime
+        self.temp_selected_date = datetime(self.view_year, self.view_month, day).date()
+        self._update_calendar_ui()
+
+    def _confirm_date(self):
+        self.selected_date = self.temp_selected_date
+        self.update_dt_labels()
+        self.date_dialog.dismiss()
 
     def show_time_picker(self, instance):
         from kivymd.uix.dialog import MDDialog
-        from kivymd.uix.button import MDFlatButton
+        from kivymd.uix.button import MDFlatButton, MDRaisedButton
         from kivymd.uix.boxlayout import MDBoxLayout
         from kivymd.uix.textfield import MDTextField
+        from kivymd.uix.label import MDLabel
         from kivy.metrics import dp
         from datetime import time
 
-        layout = MDBoxLayout(
-            orientation="vertical",
-            spacing=dp(20),
-            padding=dp(20),
-            size_hint_y=None,
-            height=dp(180),
-        )
+        layout = MDBoxLayout(orientation="vertical", spacing=dp(10), padding=[dp(20), dp(10), dp(20), dp(10)], size_hint_y=None, height=dp(250))
+        
+        # Time inputs
+        time_box = MDBoxLayout(spacing=dp(15), size_hint_y=None, height=dp(80))
+        self.hour_input = MDTextField(hint_text="Hour (1-12)", input_filter="int", text=str(self.selected_time.strftime("%I")).lstrip('0'))
+        self.minute_input = MDTextField(hint_text="Min (0-59)", input_filter="int", text=str(self.selected_time.strftime("%M")))
+        time_box.add_widget(self.hour_input)
+        time_box.add_widget(self.minute_input)
+        layout.add_widget(time_box)
 
-        hour_input = MDTextField(
-            hint_text="Hour (0-23)",
-            input_filter="int",
-            text=str(self.selected_time.hour)
+        # AM/PM Toggle
+        am_pm_box = MDBoxLayout(spacing=dp(10), adaptive_width=True, pos_hint={"center_x": .5}, size_hint_y=None, height=dp(50))
+        self.temp_am_pm = "AM" if self.selected_time.hour < 12 else "PM"
+        
+        self.am_btn = MDRaisedButton(
+            text="AM", 
+            md_bg_color=self.app.theme_cls.primary_color if self.temp_am_pm == "AM" else (0.7,0.7,0.7,1)
         )
-        minute_input = MDTextField(
-            hint_text="Minute (0-59)",
-            input_filter="int",
-            text=str(self.selected_time.minute)
+        self.pm_btn = MDRaisedButton(
+            text="PM", 
+            md_bg_color=self.app.theme_cls.primary_color if self.temp_am_pm == "PM" else (0.7,0.7,0.7,1)
         )
+        
+        def set_am(x):
+            self.temp_am_pm = "AM"
+            self.am_btn.md_bg_color = self.app.theme_cls.primary_color
+            self.pm_btn.md_bg_color = (0.7,0.7,0.7,1)
+        
+        def set_pm(x):
+            self.temp_am_pm = "PM"
+            self.pm_btn.md_bg_color = self.app.theme_cls.primary_color
+            self.am_btn.md_bg_color = (0.7,0.7,0.7,1)
 
-        layout.add_widget(hour_input)
-        layout.add_widget(minute_input)
+        self.am_btn.bind(on_release=set_am)
+        self.pm_btn.bind(on_release=set_pm)
+        
+        am_pm_box.add_widget(self.am_btn)
+        am_pm_box.add_widget(self.pm_btn)
+        layout.add_widget(am_pm_box)
 
         def confirm_time(x):
             try:
-                h = int(hour_input.text) if hour_input.text else 0
-                m = int(minute_input.text) if minute_input.text else 0
-                if 0 <= h <= 23 and 0 <= m <= 59:
-                    self.selected_time = time(hour=h, minute=m)
-                    dialog.dismiss()
-                    self.update_dt_labels()
-                else:
-                    self.show_error("Hour 0-23, Minute 0-59")
-            except Exception as e:
-                self.show_error(f"Invalid time: {e}")
+                h_str = self.hour_input.text.strip()
+                m_str = self.minute_input.text.strip()
+                if not h_str or not m_str:
+                    raise ValueError
+                h = int(h_str)
+                m = int(m_str)
+                
+                if not (1 <= h <= 12) or not (0 <= m <= 59):
+                    raise ValueError
+                
+                if self.temp_am_pm == "PM" and h != 12:
+                    h += 12
+                elif self.temp_am_pm == "AM" and h == 12:
+                    h = 0
+                
+                from datetime import time
+                self.selected_time = time(h, m)
+                self.time_dialog.dismiss()
+                self.update_dt_labels()
+            except:
+                self.show_error("Invalid time (H: 1-12, M: 0-59)")
 
-        dialog = MDDialog(
+        self.time_dialog = MDDialog(
             title="Select Time",
             type="custom",
             content_cls=layout,
-            size_hint=(0.85, None),
-            height=dp(320),
+            size_hint=(0.9, None),
+            height=dp(350),
             buttons=[
-                MDFlatButton(text="CANCEL", on_release=lambda x: dialog.dismiss()),
+                MDFlatButton(text="CANCEL", on_release=lambda x: self.time_dialog.dismiss()),
                 MDFlatButton(text="OK", on_release=confirm_time),
             ],
         )
-        dialog.open()
+        self.time_dialog.open()
 
     def on_date_save(self, instance, value, date_range):
         # Legacy callback - mostly internal now
