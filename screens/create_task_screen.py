@@ -358,8 +358,8 @@ class CreateTaskScreen(MDScreen):
         from kivy.core.window import Window
         
         class ResponsiveTimePicker(MDTimePicker):
-            def _check_orienation(self, inst, orientation):
-                super()._check_orienation(inst, "portrait")
+            def _update_pos_size(self, orientation, anim=False):
+                super()._update_pos_size("portrait", anim)
 
         time_dialog = ResponsiveTimePicker(primary_color=self.app.theme_cls.primary_color)
         time_dialog.size_hint = (None, None)
