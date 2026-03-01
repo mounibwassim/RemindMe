@@ -341,9 +341,9 @@ class CreateTaskScreen(MDScreen):
                 super().on_device_orientation(inst, "portrait")
 
         date_dialog = ResponsiveDatePicker(primary_color=self.app.theme_cls.primary_color)
-        date_dialog.size_hint = (None, None)
+        date_dialog.size_hint = (0.9, None)
         date_dialog.width = Window.width * 0.9
-        date_dialog.height = Window.height * 0.7
+        date_dialog.pos_hint = {"center_x": 0.5, "center_y": 0.5}
         date_dialog.bind(on_save=self.on_date_save)
         date_dialog.open()
 
@@ -362,9 +362,9 @@ class CreateTaskScreen(MDScreen):
                 super()._update_pos_size("portrait", anim)
 
         time_dialog = ResponsiveTimePicker(primary_color=self.app.theme_cls.primary_color)
-        time_dialog.size_hint = (None, None)
+        time_dialog.size_hint = (0.9, None)
         time_dialog.width = Window.width * 0.9
-        time_dialog.height = Window.height * 0.7
+        time_dialog.pos_hint = {"center_x": 0.5, "center_y": 0.5}
         time_dialog.bind(on_save=self.on_time_save)
         time_dialog.open()
 

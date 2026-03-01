@@ -48,14 +48,37 @@ def is_task_related(text: str) -> bool:
         "study", "school", "class", "exam", "assignment", "book",
         "gym", "sport", "workout", "run", "shop", "mall", "market", "store",
         "meet", "work", "office", "client", "call", "email",
-        "doctor", "hospital", "med", "health",
+        "doctor", "hospital", "med", "health", "health", "dentist", "appointment",
         "flight", "trip", "travel", "vacation",
         "party", "friend", "personal", "family", "home",
         "am", "pm", "morning", "evening", "night", "hour", "minute"
     ]
     
-    # Must contain at least one task-oriented semantic keyword
-    return any(word in text_lower for word in keyword_whitelist)
+    # 1. Exact Match Fast-Path
+    if any(word in text_lower for word in keyword_whitelist):
+        return True
+        
+    # 2. PRO-Level Fuzzy Intent Matching for Typos (e.g. "metting", "sportt")
+    try:
+        from rapidfuzz import process
+        words = text_lower.split()
+        for w in words:
+            # Skip noise
+            if len(w) <= 3: 
+                continue
+            
+            # extractOne returns (match_string, score, index)
+            result = process.extractOne(w, keyword_whitelist)
+            if result:
+                match_str, score, _ = result
+                # 80% similarity threshold
+                if score >= 80:
+                    return True
+    except ImportError:
+        print("DEBUG: RapidFuzz not installed. Falling back to strict intent matching.")
+        pass
+
+    return False
 
 def detect_intent(text: str) -> str:
     """
