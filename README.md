@@ -75,15 +75,30 @@ python main.py
 - Windows users may need to run as Administrator for notifications.
 - The app icon/logo will appear correctly in the taskbar and notifications (Windows only).
 
-### Option 2: Run Pre-Built Executable
+## Target Users & Problem Solved
+RemindMe is a secure desktop task management application with AI-powered natural language task creation and encrypted local storage. It is explicitly designed for privacy-conscious users who want powerful scheduling algorithms without sending their personal productivity data to cloud third parties.
 
-For non-technical users who just want the app running without installing Python.
+## Demo Video
+Watch the application in action:
+[Demo Video Link]
 
-#### Download Pre-Built App
-For Windows users, download the latest executable from the [Releases](https://github.com/mounibwassim/RemindMe/releases) page.  
-Double-click `RemindMe_Windows.exe` to run. The app will appear in your taskbar with its logo and native notifications.
+## Screenshots
 
-*(Once the Android APK is ready, it will also be available on the Releases page.)*
+*(Place UI images in `assets/screenshots/`)*
+- Login screen
+- Dashboard
+- AI assistant
+- Task creation
+- Notification popup
+
+## How to Test (Windows)
+
+1. Go to **Releases**.
+2. Download `RemindMe.exe`.
+3. Run the application.
+4. Create an account via Firebase Auth.
+5. Use the internal **AI assistant** to instantly create a task:
+   - *Example: "Remind me to submit my report tomorrow at 5pm"*
 
 ### Option 3: Building for Android (APK)
 
