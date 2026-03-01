@@ -334,71 +334,66 @@ class CreateTaskScreen(MDScreen):
         self.time_btn.text = self.selected_time.strftime("%H:%M")
 
     def show_date_picker(self, instance):
-        from kivy.metrics import dp
-        from kivy.core.window import Window
-        from kivymd.uix.pickers import MDDatePicker
-        from kivymd.uix.dialog import MDDialog
-        from kivymd.uix.button import MDFlatButton
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self._do_show_date_picker(), 0.1)
 
-        date_dialog = MDDatePicker(
-            primary_color=self.app.theme_cls.primary_color,
-            size_hint=(0.95, None),
-        )
-        date_dialog.height = min(Window.height * 0.8, dp(400))
-        date_dialog.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+    def _do_show_date_picker(self):
+        try:
+            from kivy.core.window import Window
+            from kivymd.uix.picker import MDDatePicker
+            from datetime import datetime
 
-        def on_save(inst, value, date_range):
-            self.selected_date = value
-            self.update_dt_labels()
-            dialog.dismiss()
+            class ResponsiveDatePicker(MDDatePicker):
+                def _update_dialog_size(self):
+                    # Limit width/height to fit mobile screens
+                    self.width = min(Window.width * 0.95, 400)
+                    self.height = min(Window.height * 0.8, 400)
+                    self.pos_hint = {"center_x": 0.5, "center_y": 0.5}
 
-        dialog = MDDialog(
-            title="Select Date",
-            type="custom",
-            content_cls=date_dialog,
-            buttons=[
-                MDFlatButton(text="CANCEL", on_release=lambda x: dialog.dismiss()),
-                # Using getattr to safely fetch 'sel_date' or 'date' depending on KivyMD internal API structure.
-                MDFlatButton(text="OK", on_release=lambda x: on_save(date_dialog, getattr(date_dialog, 'sel_date', getattr(date_dialog, 'date', None)), None)),
-            ],
-        )
-        dialog.open()
+            date_dialog = ResponsiveDatePicker(
+                primary_color=self.app.theme_cls.primary_color
+            )
+            date_dialog.bind(on_save=self.on_date_save)
+            date_dialog.open()
+        except Exception as e:
+            print("Error opening DatePicker:", e)
+            self.show_error(f"Unable to open Date Picker: {e}")
 
     def on_date_save(self, instance, value, date_range):
-        # Native callback no longer bound, preserving signature if referenced elsewhere
-        if value < datetime.now().date():
-            self.show_error("Cannot select a past date.")
-            return
-        self.selected_date = value
-        self.update_dt_labels()
+        try:
+            from datetime import datetime
+            if value < datetime.now().date():
+                self.show_error("Cannot select a past date.")
+                return
+            self.selected_date = value
+            self.update_dt_labels()
+        except Exception as e:
+            print("Error in on_date_save:", e)
 
     def show_time_picker(self, instance):
-        from kivy.metrics import dp
-        from kivy.core.window import Window
-        from kivymd.uix.pickers import MDTimePicker
-        from kivymd.uix.dialog import MDDialog
-        from kivymd.uix.button import MDFlatButton
+        from kivy.clock import Clock
+        Clock.schedule_once(lambda dt: self._do_show_time_picker(), 0.1)
 
-        time_dialog = MDTimePicker(
-            primary_color=self.app.theme_cls.primary_color,
-            size_hint=(0.9, None)
-        )
-        time_dialog.height = min(Window.height * 0.5, dp(300))
-        time_dialog.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+    def _do_show_time_picker(self):
+        try:
+            from kivy.core.window import Window
+            from kivymd.uix.picker import MDTimePicker
 
-        dialog = MDDialog(
-            title="Select Time",
-            type="custom",
-            content_cls=time_dialog,
-            buttons=[
-                MDFlatButton(text="CANCEL", on_release=lambda x: dialog.dismiss()),
-                MDFlatButton(text="OK", on_release=lambda x: (
-                    self.on_time_save(time_dialog, getattr(time_dialog, 'time', None)), 
-                    dialog.dismiss()
-                )),
-            ],
-        )
-        dialog.open()
+            class ResponsiveTimePicker(MDTimePicker):
+                def _update_dialog_size(self):
+                    self.width = min(Window.width * 0.9, 300)
+                    self.height = min(Window.height * 0.5, 300)
+                    self.pos_hint = {"center_x": 0.5, "center_y": 0.5}
+
+            time_dialog = ResponsiveTimePicker(
+                primary_color=self.app.theme_cls.primary_color
+                # mode="spinner" # This was causing TypeError previously, disabling for safety
+            )
+            time_dialog.bind(on_save=self.on_time_save)
+            time_dialog.open()
+        except Exception as e:
+            print("Error opening TimePicker:", e)
+            self.show_error(f"Unable to open Time Picker: {e}")
 
     def on_time_save(self, instance, value):
         self.selected_time = value
