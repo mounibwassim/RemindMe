@@ -89,7 +89,7 @@ def ensure_account(username: str, passphrase: str, create_if_missing: bool = Fal
         
         dek = decrypt_bytes(w_dek["ct"], w_dek["nonce"], user_key)
         
-        # Ensure schema
+        # Ensure schema enhancements
         ensure_category_column(db_path)
         ensure_sound_column(db_path)
         ensure_description_column(db_path)

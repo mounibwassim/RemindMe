@@ -298,9 +298,9 @@ class LoginScreen(MDScreen):
                 
                 try:
                     dek, db_path = ensure_account(username, pw, create_if_missing=False, path=self.app.storage_path, email=email, metadata=metadata)
-                except ValueError as ve:
-                    print(f"DEBUG: Account unlocking failed: {ve}")
-                    self.show_error(str(ve))
+                except Exception as e:
+                    print(f"DEBUG: Critical Local DB unlock failed: {e}")
+                    self.show_error(f"Local Account Encryption Error: {str(e)}")
                     return
 
             # Success

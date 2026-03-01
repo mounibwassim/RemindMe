@@ -22,13 +22,16 @@ if sys.platform == 'win32':
         ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AUMID)
         print(f"✅ AppUserModelID set to: {AUMID} (Enabled)")
 
+        from kivy.config import Config
         from kivy.core.window import Window
         def resource_path(relative_path):
             if hasattr(sys, '_MEIPASS'):
                 return os.path.join(sys._MEIPASS, relative_path)
             return os.path.abspath(relative_path)
             
-        Window.set_icon(resource_path("app.ico"))
+        icon_override = resource_path("app.png")
+        Config.set('kivy', 'window_icon', icon_override)
+        Window.set_icon(icon_override)
 
         # Ensure Start Menu Shortcut exists with AUMID (Required for WinRT)
         def ensure_shortcut():
@@ -151,6 +154,13 @@ class ReminderApp(MDApp):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.scheduler = None
+        
+        # 🔴 CRITICAL: Force MDApp to use RemindMe logo instead of Kivy defaults
+        try:
+            from utils.helpers import get_asset_path
+            self.icon = get_asset_path("app.png")
+        except:
+            pass
         
     def build(self):
         # 1. Check for startup errors first
@@ -322,6 +332,34 @@ class ReminderApp(MDApp):
             return
         if not self.db_path or not self.derived_key:
             print("Scheduler: Cannot start — db_path or derived_key missing.")
+            return
+            
+        try:
+            import sqlite3
+            conn = sqlite3.connect(self.db_path)
+            cur = conn.cursor()
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id INTEGER PRIMARY KEY,
+                    ciphertext TEXT,
+                    nonce TEXT,
+                    due_iso TEXT,
+                    priority INTEGER,
+                    notified INTEGER,
+                    created_iso TEXT,
+                    completed_iso TEXT,
+                    category TEXT,
+                    sound TEXT,
+                    description TEXT,
+                    status TEXT,
+                    notification_status TEXT,
+                    is_overdue INTEGER
+                )
+            """)
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logging.error(f"CRITICAL: Schema validation failed. Halting Scheduler: {e}")
             return
             
         from backend.scheduler import Scheduler

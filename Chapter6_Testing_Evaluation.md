@@ -397,7 +397,13 @@ The testing phase confirmed that RemindMe meets all functional and security obje
 | **ISS-09** | MRO Conflict Crash | Calendar | `calendar_month.py`: L19 | Figure 6.9 | Fixed (Pass) |
 | **ISS-10** | Unprocessed Ciphertext | Calendar | `calendar_day.py`: L259 | Figure 6.10 | Fixed (Pass) |
 
-### 6.7.2 Final Evaluation Summary
+### 6.7.2 AI Assistant Packaging Issue (dateparser)
+
+**Description:** When running the application as a bundled PyInstaller standalone executable on Windows, the embedded AI Assistant feature failed to initialize, raising the fatal traceback: `Internal error: No module named dateparser`.
+**Root Cause:** The `dateparser` library executes logic leveraging dynamic runtime imports and timezone-specific asset loading. PyInstaller's static compilation logic failed to trace these deep dynamic dependencies, excluding the whole package from the `_MEIPASS` runtime wrapper and triggering a `ModuleNotFoundError` during user interaction.
+**Resolution:** The missing `dateparser` module was officially documented within the environment `requirements.txt`, and the Windows compiler string was adjusted dynamically to include `--hidden-import=dateparser` and `--collect-all dateparser`. This explicitly extracts and embeds the library directly alongside the `.exe` payload.
+
+### 6.7.3 Final Evaluation Summary
 
 All core functional requirements established in Chapter 3 were observed to be operating correctly on user interaction. The security implementations—most notably the local application of AES-256-GCM encryption—were rigorously checked. The final evaluation confirms that the system is fully stable, secure, and ready for operational deployment.
 
