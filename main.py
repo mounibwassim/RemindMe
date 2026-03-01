@@ -3,6 +3,11 @@ import os
 import logging
 import traceback
 import ctypes
+# 🔴 CRITICAL: Fix for PyInstaller windowed mode (no stdout/stderr)
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
 
 # 🔴 CRITICAL: SET Crash Logger immediately
 log_file = os.path.join(os.getcwd(), "crash_debug.log")
@@ -10,10 +15,8 @@ log_file = os.path.join(os.getcwd(), "crash_debug.log")
 def excepthook(exc_type, exc_value, exc_traceback):
     with open(log_file, "a", encoding="utf-8") as f:
         f.write("".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
-    print(f"Error logged to {log_file}")
 
 sys.excepthook = excepthook
-
 # 🔴 CRITICAL: SET AppUserModelID for Windows Toast Notifications
 # This must be done at the very beginning of the process.
 if sys.platform == 'win32':
