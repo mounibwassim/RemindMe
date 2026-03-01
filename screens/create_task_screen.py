@@ -335,24 +335,23 @@ class CreateTaskScreen(MDScreen):
 
     def show_date_picker(self, instance):
         try:
-            from kivy.metrics import dp
-            from kivy.core.window import Window
             from kivymd.uix.pickers import MDDatePicker
-            
+            from kivy.metrics import dp
+
             date_dialog = MDDatePicker(
                 primary_color=self.app.theme_cls.primary_color,
                 radius=[20, 20, 20, 20],
             )
 
-            # Force smaller size for mobile
+            # Force compact mobile size for simulated frame
             date_dialog.size_hint = (None, None)
-            date_dialog.width = min(dp(330), Window.width * 0.95)
-            date_dialog.height = min(dp(420), Window.height * 0.85)
+            date_dialog.width = dp(320)
+            date_dialog.height = dp(420)
 
             date_dialog.bind(on_save=self.on_date_save)
             date_dialog.open()
         except Exception as e:
-            print("Error opening DatePicker:", e)
+            print("DatePicker error:", e)
             self.show_error(f"Unable to open Date Picker: {e}")
 
     def on_date_save(self, instance, value, date_range):
@@ -367,21 +366,21 @@ class CreateTaskScreen(MDScreen):
         try:
             from kivymd.uix.pickers import MDTimePicker
             from kivy.metrics import dp
+            from kivy.core.window import Window
 
             time_dialog = MDTimePicker(
-                primary_color=self.app.theme_cls.primary_color,
-                mode="dial"  # This shows clock with OK/Cancel
+                primary_color=self.app.theme_cls.primary_color
             )
 
-            # Force compact size
+            # Make it smaller properly to fit phone frame
             time_dialog.size_hint = (None, None)
-            time_dialog.width = dp(300)
-            time_dialog.height = dp(350)
+            time_dialog.width = min(dp(320), Window.width * 0.9)
+            time_dialog.height = dp(420)  # Increased slightly for button visibility
 
             time_dialog.bind(on_save=self.on_time_save)
             time_dialog.open()
         except Exception as e:
-            print("Error opening TimePicker:", e)
+            print("TimePicker error:", e)
             self.show_error(f"Unable to open Time Picker: {e}")
 
     def on_time_save(self, instance, value):
