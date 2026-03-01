@@ -1,13 +1,19 @@
 import sys
 import os
+
+class _DummyStream:
+    def write(self, msg, *args, **kwargs): pass
+    def flush(self, *args, **kwargs): pass
+    def isatty(self, *args, **kwargs): return False
+
+if sys.stdout is None:
+    sys.stdout = _DummyStream()
+if sys.stderr is None:
+    sys.stderr = _DummyStream()
+
 import logging
 import traceback
 import ctypes
-# 🔴 CRITICAL: Fix for PyInstaller windowed mode (no stdout/stderr)
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
 
 # 🔴 CRITICAL: SET Crash Logger immediately
 log_file = os.path.join(os.getcwd(), "crash_debug.log")
