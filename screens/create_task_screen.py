@@ -334,58 +334,117 @@ class CreateTaskScreen(MDScreen):
         self.time_btn.text = self.selected_time.strftime("%H:%M")
 
     def show_date_picker(self, instance):
-        try:
-            from kivymd.uix.pickers import MDDatePicker
-            from kivy.metrics import dp
-
-            date_dialog = MDDatePicker(
-                primary_color=self.app.theme_cls.primary_color,
-                radius=[20, 20, 20, 20],
-            )
-
-            # Force compact mobile size for simulated frame
-            date_dialog.size_hint = (None, None)
-            date_dialog.width = dp(320)
-            date_dialog.height = dp(420)
-
-            date_dialog.bind(on_save=self.on_date_save)
-            date_dialog.open()
-        except Exception as e:
-            print("DatePicker error:", e)
-            self.show_error(f"Unable to open Date Picker: {e}")
-
-    def on_date_save(self, instance, value, date_range):
+        from kivymd.uix.dialog import MDDialog
+        from kivymd.uix.button import MDFlatButton
+        from kivymd.uix.gridlayout import MDGridLayout
+        from kivymd.uix.label import MDLabel
+        from kivy.metrics import dp
         from datetime import datetime
-        if value < datetime.now().date():
-            self.show_error("Cannot select a past date.")
-            return
-        self.selected_date = value
-        self.update_dt_labels()
+        import calendar
+
+        today = datetime.now()
+        month_days = calendar.monthrange(today.year, today.month)[1]
+
+        grid = MDGridLayout(
+            cols=7,
+            spacing=dp(8),
+            padding=dp(10),
+            size_hint_y=None,
+        )
+        grid.bind(minimum_height=grid.setter("height"))
+
+        def select_day(day):
+            self.selected_date = datetime(today.year, today.month, day).date()
+            dialog.dismiss()
+            self.update_dt_labels()
+
+        # Week headers
+        for d in ["Mo","Tu","We","Th","Fr","Sa","Su"]:
+            grid.add_widget(MDLabel(text=d, halign="center", font_style="Caption"))
+
+        # Days
+        for day in range(1, month_days + 1):
+            btn = MDFlatButton(
+                text=str(day),
+                on_release=lambda x, d=day: select_day(d)
+            )
+            grid.add_widget(btn)
+
+        dialog = MDDialog(
+            title=f"{calendar.month_name[today.month]} {today.year}",
+            type="custom",
+            content_cls=grid,
+            size_hint=(0.9, None),
+            height=dp(420),
+            buttons=[
+                MDFlatButton(text="CANCEL", on_release=lambda x: dialog.dismiss())
+            ],
+        )
+        dialog.open()
 
     def show_time_picker(self, instance):
-        try:
-            from kivymd.uix.pickers import MDTimePicker
-            from kivy.metrics import dp
-            from kivy.core.window import Window
+        from kivymd.uix.dialog import MDDialog
+        from kivymd.uix.button import MDFlatButton
+        from kivymd.uix.boxlayout import MDBoxLayout
+        from kivymd.uix.textfield import MDTextField
+        from kivy.metrics import dp
+        from datetime import time
 
-            time_dialog = MDTimePicker(
-                primary_color=self.app.theme_cls.primary_color
-            )
+        layout = MDBoxLayout(
+            orientation="vertical",
+            spacing=dp(20),
+            padding=dp(20),
+            size_hint_y=None,
+            height=dp(180),
+        )
 
-            # Make it smaller properly to fit phone frame
-            time_dialog.size_hint = (None, None)
-            time_dialog.width = min(dp(320), Window.width * 0.9)
-            time_dialog.height = dp(420)  # Increased slightly for button visibility
+        hour_input = MDTextField(
+            hint_text="Hour (0-23)",
+            input_filter="int",
+            text=str(self.selected_time.hour)
+        )
+        minute_input = MDTextField(
+            hint_text="Minute (0-59)",
+            input_filter="int",
+            text=str(self.selected_time.minute)
+        )
 
-            time_dialog.bind(on_save=self.on_time_save)
-            time_dialog.open()
-        except Exception as e:
-            print("TimePicker error:", e)
-            self.show_error(f"Unable to open Time Picker: {e}")
+        layout.add_widget(hour_input)
+        layout.add_widget(minute_input)
+
+        def confirm_time(x):
+            try:
+                h = int(hour_input.text) if hour_input.text else 0
+                m = int(minute_input.text) if minute_input.text else 0
+                if 0 <= h <= 23 and 0 <= m <= 59:
+                    self.selected_time = time(hour=h, minute=m)
+                    dialog.dismiss()
+                    self.update_dt_labels()
+                else:
+                    self.show_error("Hour 0-23, Minute 0-59")
+            except Exception as e:
+                self.show_error(f"Invalid time: {e}")
+
+        dialog = MDDialog(
+            title="Select Time",
+            type="custom",
+            content_cls=layout,
+            size_hint=(0.85, None),
+            height=dp(320),
+            buttons=[
+                MDFlatButton(text="CANCEL", on_release=lambda x: dialog.dismiss()),
+                MDFlatButton(text="OK", on_release=confirm_time),
+            ],
+        )
+        dialog.open()
+
+    def on_date_save(self, instance, value, date_range):
+        # Legacy callback - mostly internal now
+        pass
 
     def on_time_save(self, instance, value):
-        self.selected_time = value
-        self.update_dt_labels()
+        # Legacy callback - mostly internal now
+        pass
 
     def set_sound(self, sound):
         # Kept for compatibility with prefill, but internal UI is gone
