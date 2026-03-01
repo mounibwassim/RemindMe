@@ -190,8 +190,13 @@ def parse_date_time_smart(text: str):
     Robustly parses date and time from text using search_dates.
     Returns: (dt_obj, has_time_bool, found_text_list)
     """
-    import dateparser
-    from dateparser.search import search_dates
+    try:
+        import dateparser
+        from dateparser.search import search_dates
+    except ImportError:
+        import logging
+        logging.error("dateparser module missing")
+        raise RuntimeError("AI dependency missing: dateparser")
 
     settings = {
         'TIMEZONE': 'local',
@@ -273,7 +278,12 @@ def validate_date(text: str):
     return dt, True, None
 
 def validate_time(text: str, date_ctx):
-    import dateparser
+    try:
+        import dateparser
+    except ImportError:
+        import logging
+        logging.error("dateparser module missing")
+        raise RuntimeError("AI dependency missing: dateparser")
     if isinstance(date_ctx, float):
         date_ctx = datetime.fromtimestamp(date_ctx)
     parse_text = f"{date_ctx.strftime('%Y-%m-%d')} {text}"
@@ -287,7 +297,12 @@ def validate_time(text: str, date_ctx):
     return dt.isoformat(), True, None
 
 def extract_task_details(text: str):
-    import dateparser
+    try:
+        import dateparser
+    except ImportError:
+        import logging
+        logging.error("dateparser module missing")
+        raise RuntimeError("AI dependency missing: dateparser")
     clean_title = correct_typos(text)
     
     # 0. Manual Check for "Next/This/Last Weekday"
