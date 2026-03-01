@@ -334,10 +334,7 @@ class CreateTaskScreen(MDScreen):
         self.time_btn.text = self.selected_time.strftime("%H:%M")
 
     def show_date_picker(self, instance):
-        date_dialog = MDDatePicker()
-        date_dialog.size_hint = (0.8, None)
-        date_dialog.height = dp(400)
-        date_dialog.width = dp(300)
+        date_dialog = MDDatePicker(primary_color=self.app.theme_cls.primary_color)
         date_dialog.bind(on_save=self.on_date_save)
         date_dialog.open()
 
@@ -349,10 +346,7 @@ class CreateTaskScreen(MDScreen):
         self.update_dt_labels()
 
     def show_time_picker(self, instance):
-        time_dialog = MDTimePicker()
-        time_dialog.size_hint = (0.8, None)
-        time_dialog.width = dp(300)
-        time_dialog.height = dp(400)
+        time_dialog = MDTimePicker(primary_color=self.app.theme_cls.primary_color)
         time_dialog.bind(on_save=self.on_time_save)
         time_dialog.open()
 
