@@ -1,0 +1,21 @@
+--- Testing Fuzzy Date Parsing ---
+Input: 'Meeting on 15 januare'
+  -> Title: Meeting
+  -> Date:  2027-01-15
+------------------------------
+Input: 'Gym on 5 fubruar'
+  -> Title: Gym
+  -> Date:  2026-02-06
+------------------------------
+Input: 'Party marshh 10'
+  -> Title: Party
+  -> Date:  2026-03-10
+------------------------------
+Input: 'Reminder for 12 dec'
+  -> Title: Reminder for
+  -> Date:  2026-12-12
+------------------------------
+Input: 'Call mom tmr'
+  -> Title: Call mom
+  -> Date:  2026-02-24
+------------------------------

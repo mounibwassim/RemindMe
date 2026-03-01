@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "617436301602",
+    "project_id": "remindme-mounib",
+    "storage_bucket": "remindme-mounib.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:617436301602:android:6bf3b5f6e9e334577e3d7b",
+        "android_client_info": {
+          "package_name": "org.remindme.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDjksG-0_SrRDCmQYLgSp-tjPgTMFsQJTQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
