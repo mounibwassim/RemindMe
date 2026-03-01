@@ -334,7 +334,16 @@ class CreateTaskScreen(MDScreen):
         self.time_btn.text = self.selected_time.strftime("%H:%M")
 
     def show_date_picker(self, instance):
-        date_dialog = MDDatePicker(primary_color=self.app.theme_cls.primary_color)
+        from kivy.core.window import Window
+        
+        class ResponsiveDatePicker(MDDatePicker):
+            def on_device_orientation(self, inst, orientation):
+                super().on_device_orientation(inst, "portrait")
+
+        date_dialog = ResponsiveDatePicker(primary_color=self.app.theme_cls.primary_color)
+        date_dialog.size_hint = (None, None)
+        date_dialog.width = Window.width * 0.9
+        date_dialog.height = Window.height * 0.7
         date_dialog.bind(on_save=self.on_date_save)
         date_dialog.open()
 
@@ -346,7 +355,16 @@ class CreateTaskScreen(MDScreen):
         self.update_dt_labels()
 
     def show_time_picker(self, instance):
-        time_dialog = MDTimePicker(primary_color=self.app.theme_cls.primary_color)
+        from kivy.core.window import Window
+        
+        class ResponsiveTimePicker(MDTimePicker):
+            def _check_orienation(self, inst, orientation):
+                super()._check_orienation(inst, "portrait")
+
+        time_dialog = ResponsiveTimePicker(primary_color=self.app.theme_cls.primary_color)
+        time_dialog.size_hint = (None, None)
+        time_dialog.width = Window.width * 0.9
+        time_dialog.height = Window.height * 0.7
         time_dialog.bind(on_save=self.on_time_save)
         time_dialog.open()
 
