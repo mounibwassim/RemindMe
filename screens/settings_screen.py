@@ -215,8 +215,8 @@ class SettingsScreen(MDScreen):
             return
             
         try:
-            # 0. User Lookup Validation (Transaction Safety)
-            from backend.auth_service import get_username_data
+            # 0. User Lookup Validation (Unifying to use RTDB Fallback)
+            from backend.firebase_service import get_username_data
             user_norm = self.app.current_user.strip().lower()
             
             # Fetch valid user explicitly before doing anything
@@ -235,7 +235,14 @@ class SettingsScreen(MDScreen):
             auth_data, error = sign_in_with_email_password(email, old)
             
             if error:
-                self.show_error(f"Error: {error}")
+                # 🟢 IMPROVED: User-friendly error for incorrect old password
+                friendly_error = str(error)
+                if "INVALID_PASSWORD" in friendly_error:
+                    friendly_error = "Incorrect old password. Please try again."
+                elif "TOO_MANY_ATTEMPTS" in friendly_error:
+                    friendly_error = "Too many failed attempts. Please try again later."
+                
+                self.show_error(friendly_error)
                 self.saving_pass = False
                 return
                 

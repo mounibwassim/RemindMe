@@ -234,9 +234,20 @@ class DashboardScreen(MDScreen):
         
         # Header (Theme-aware)
         header1 = MDCard(size_hint_y=None, height=dp(80), radius=[0, 0, 20, 20], elevation=4, md_bg_color=App.get_running_app().theme_cls.primary_color)
-        h1 = MDBoxLayout(orientation="horizontal", padding=[dp(15), 0], spacing=dp(5))
+        h1 = MDBoxLayout(orientation="horizontal", padding=[dp(10), 0], spacing=dp(10))
         
-        # Date Button (Left)
+        # 🟢 ADDED: Application Logo
+        from kivy.uix.image import Image
+        from utils.helpers import get_asset_path
+        logo = Image(
+            source=get_asset_path("assets/logo.png"),
+            size_hint=(None, None),
+            size=(dp(50), dp(50)),
+            pos_hint={'center_y': 0.5}
+        )
+        h1.add_widget(logo)
+        
+        # Date Button
         today_str = datetime.now().strftime("%a %d %b")
         self.date_btn = MDFlatButton(
             text=today_str, 
@@ -312,9 +323,17 @@ class DashboardScreen(MDScreen):
         
         # Header (Blue)
         header3 = MDCard(size_hint_y=None, height=dp(80), radius=[0, 0, 20, 20], elevation=4, md_bg_color=App.get_running_app().theme_cls.primary_color)
-        h3 = MDBoxLayout(orientation="horizontal", padding=[dp(10), 0], spacing=dp(5))
+        h3 = MDBoxLayout(orientation="horizontal", padding=[dp(10), 0], spacing=dp(10))
         
-        h3.add_widget(MDLabel(text="History", theme_text_color="Custom", text_color=(1,1,1,1), font_style="H5", bold=True, pos_hint={'center_y': 0.5}, halign="center"))
+        # 🟢 ADDED: Application Logo
+        h3.add_widget(Image(
+            source=get_asset_path("assets/logo.png"),
+            size_hint=(None, None),
+            size=(dp(40), dp(40)),
+            pos_hint={'center_y': 0.5}
+        ))
+        
+        h3.add_widget(MDLabel(text="History", theme_text_color="Custom", text_color=(1,1,1,1), font_style="H5", bold=True, pos_hint={'center_y': 0.5}))
         
         # Clear All
         h3.add_widget(MDIconButton(icon="delete", theme_text_color="Custom", text_color=(1, 0.3, 0.3, 1), on_release=self.confirm_clear_all_history, pos_hint={'center_y': 0.5}))

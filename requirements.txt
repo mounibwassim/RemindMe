@@ -5,3 +5,4 @@ pillow
 requests
 win10toast
 dateparser
+plyer

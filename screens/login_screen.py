@@ -37,13 +37,24 @@ class LoginScreen(MDScreen):
         )
         self.add_widget(header_bg)
         
-        # Header Text (Welcome!)
+        # 🟢 ADDED: Application Logo
+        from kivy.uix.image import Image
+        from utils.helpers import get_asset_path
+        logo = Image(
+            source=get_asset_path("assets/logo.png"),
+            size_hint=(None, None),
+            size=(dp(100), dp(100)),
+            pos_hint={"center_x": 0.5, "center_y": 0.93}
+        )
+        self.add_widget(logo)
+        
+        # Header Text (RemindMe)
         self.add_widget(MDLabel(
             text="RemindMe",
-            font_style="H3",
+            font_style="H4", # Reduced size to fit logo
             theme_text_color="Custom",
             text_color=(1, 1, 1, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.92}, # Moved UP significantly
+            pos_hint={"center_x": 0.5, "center_y": 0.85}, 
             halign="center",
             bold=True
         ))
@@ -213,10 +224,10 @@ class LoginScreen(MDScreen):
         from backend.firebase_service import (
             sign_in_with_email_password, 
             sign_up_with_email_password, 
-            update_profile
+            update_profile,
+            get_username_data,
+            save_username_mapping # Bypassing auth_service Firestore mapping
         )
-        
-        from backend.auth_service import get_username_data, save_username_mapping
         from backend.storage import get_email_by_username, ensure_account, save_last_user
         
         print(f"DEBUG: Attempting {self.mode} for user: {username}")

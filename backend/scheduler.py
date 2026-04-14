@@ -35,7 +35,7 @@ def _setup_scheduler_logger(log_dir: str):
     handler = logging.FileHandler(log_path, encoding='utf-8')
     handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     log = logging.getLogger("Scheduler")
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.INFO)
     # Avoid adding duplicate handlers on re-import
     if not any(isinstance(h, logging.FileHandler) for h in log.handlers):
         log.addHandler(handler)
@@ -76,10 +76,8 @@ class Scheduler(threading.Thread):
         logger.info("=== Scheduler thread STARTED ===")
         while not self._stop.is_set():
             try:
-                logger.debug("Polling for due tasks...")
                 rows = list_tasks(self.db_path)
                 now = datetime.now() # Local time
-                logger.debug(f"Current time (Local): {now}. Checking {len(rows)} tasks.")
                 
                 for row in rows:
                     # Safely extract array items up to max columns
@@ -140,13 +138,11 @@ class Scheduler(threading.Thread):
                         mark_notified(self.db_path, task_id)
                         logger.info(f"Task {task_id} marked as notified")
                         
-                        # Trigger UI Callback via MAIN THREAD (critical in frozen EXE:
-                        # win10toast/COM requires main thread or COM-initialized thread).
+                        # Trigger UI Callback via MAIN THREAD (critical in frozen EXE)
                         if self.on_notify:
                             logger.info(f"Scheduling on_notify for task {task_id} on main thread via Clock")
                             try:
                                 from kivy.clock import Clock
-                                # Capture values in closure, don't hold scheduler-thread references
                                 _tid = task_id
                                 _title = title
                                 Clock.schedule_once(
@@ -154,9 +150,22 @@ class Scheduler(threading.Thread):
                                     0
                                 )
                             except Exception as e:
-                                logger.error(f"Clock.schedule_once for on_notify failed: {e}\n{traceback.format_exc()}")
+                                logger.error(f"Clock.schedule_once for on_notify failed: {e}\\n{traceback.format_exc()}")
                         else:
-                            logger.warning("No on_notify callback registered — notification not delivered!")
+                            logger.warning("No on_notify callback registered")
+                            
+                        # Direct background notification fallback if running on Android
+                        if platform == 'android':
+                            try:
+                                from plyer import notification
+                                notification.notify(
+                                    title="RemindMe ⏰",
+                                    message=f"Task Due: {title}",
+                                    app_name="RemindMe",
+                                    timeout=10
+                                )
+                            except Exception as e:
+                                logger.error(f"Plyer direct notification failed: {e}")
                             
             except Exception as e:
                 logger.error(f"Scheduler loop error: {e}\n{traceback.format_exc()}")

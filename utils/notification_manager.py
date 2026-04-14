@@ -16,22 +16,13 @@ def _get_notif_logger():
     log = logging.getLogger("NotificationManager")
     if log.handlers:
         return log
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.INFO)
     fmt = logging.Formatter("[%(asctime)s][%(levelname)s][NotificationManager] %(message)s",
                             datefmt="%Y-%m-%d %H:%M:%S")
-    # File handler — always to app_debug.log
-    try:
-        log_path = os.path.join(os.environ.get("USERPROFILE", os.path.expanduser("~")),
-                                "app_debug.log")
-        fh = logging.FileHandler(log_path, encoding="utf-8")
-        fh.setLevel(logging.DEBUG)
-        fh.setFormatter(fmt)
-        log.addHandler(fh)
-    except Exception:
-        pass
+
     # Stream handler (console/logcat)
     sh = logging.StreamHandler()
-    sh.setLevel(logging.DEBUG)
+    sh.setLevel(logging.INFO)
     sh.setFormatter(fmt)
     log.addHandler(sh)
     return log
@@ -42,7 +33,7 @@ logger = _get_notif_logger()
 plyer_notification = None
 if platform != 'win':
     try:
-        from plyer import notification as plyer_notification
+        from plyer import notification as plyer_notification # type: ignore
         logger.debug("plyer imported OK")
     except Exception as e:
         logger.warning(f"plyer import failed: {e}")
@@ -119,7 +110,7 @@ class NotificationManager:
                 toaster.show_toast(
                     title,
                     message,
-                    icon_path=notify_resource_path("app.ico"),
+                    icon_path=notify_resource_path("assets/logo.ico"),
                     duration=5,
                     threaded=True
                 )
@@ -134,7 +125,7 @@ class NotificationManager:
         """Android path: Native NotificationManager via pyjnius."""
         logger.info(f"[AndroidNotification] Attempting pyjnius dispatch | title={title!r} | channel=remindme_alerts")
         try:
-            from jnius import autoclass
+            from jnius import autoclass # type: ignore
             Context = autoclass('android.content.Context')
             app_context = autoclass('org.kivy.android.PythonActivity').mActivity
             

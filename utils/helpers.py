@@ -19,14 +19,10 @@ def get_storage_path():
     """
     Returns the writable storage path for the application.
     On Android, this is the App's user_data_dir.
-    On Desktop, it is the executable directory (packaged) or current directory.
+    On Desktop, it resolves securely to %APPDATA%/RemindMe to avoid dropping clutter next to the standalone .exe.
     """
     from kivy.utils import platform
     
-    if getattr(sys, 'frozen', False):
-        # PyInstaller packaged executable
-        return os.path.dirname(os.path.abspath(sys.executable))
-        
     if platform == 'android':
         from kivy.app import App
         try:
@@ -36,7 +32,14 @@ def get_storage_path():
         except:
              pass
              
-    return os.path.abspath(".")
+    # Route Windows desktop installations to secure hidden AppData scope 
+    if platform == 'win':
+        base = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'RemindMe')
+    else:
+        base = os.path.join(os.path.expanduser('~'), '.remindme')
+        
+    os.makedirs(base, exist_ok=True)
+    return base
 
 def copy_bundled_data(storage_path):
     """

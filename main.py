@@ -1,5 +1,6 @@
 import sys
 import os
+from datetime import datetime
 
 class _DummyStream:
     def write(self, msg, *args, **kwargs): pass
@@ -16,10 +17,38 @@ import traceback
 import ctypes
 
 # 🔴 CRITICAL: SET Crash Logger immediately
-log_file = os.path.join(os.getcwd(), "crash_debug.log")
+def get_log_dir():
+    if sys.platform == 'win32':
+        base = os.path.join(os.environ.get('APPDATA', os.path.expanduser('~')), 'RemindMe')
+    else:
+        try:
+            from platform import machine
+            m = machine().lower()
+            if 'aarch64' in m or 'arm' in m:
+                try:
+                    from android.storage import app_storage_path
+                    base = app_storage_path()
+                except ImportError:
+                    # Fallback to User Data Dir if android.storage is not ready
+                    from kivy.app import App
+                    app = App.get_running_app()
+                    if app:
+                        base = app.user_data_dir
+                    else:
+                        base = os.path.expanduser('~/.remindme')
+            else:
+                base = os.path.expanduser('~/.remindme')
+        except Exception:
+            base = os.path.expanduser('~/.remindme')
+    os.makedirs(base, exist_ok=True)
+    return base
+
+log_file = os.path.join(get_log_dir(), "crash_debug.log")
 
 def excepthook(exc_type, exc_value, exc_traceback):
     with open(log_file, "a", encoding="utf-8") as f:
+        f.write("\n" + "="*40 + "\n")
+        f.write(f"Crash at {datetime.now().isoformat()}\n")
         f.write("".join(traceback.format_exception(exc_type, exc_value, exc_traceback)))
 
 sys.excepthook = excepthook
@@ -27,8 +56,9 @@ sys.excepthook = excepthook
 # This must be done at the very beginning of the process.
 if sys.platform == 'win32':
     try:
+        import ctypes as _ctypes
         AUMID = "RemindMe.App"
-        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AUMID)
+        _ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(AUMID)
         print(f"✅ AppUserModelID set to: {AUMID} (Enabled)")
 
         from kivy.config import Config
@@ -80,15 +110,22 @@ if sys.platform == 'win32':
         print(f"❌ Failed to set AppUserModelID: {e}")
 
 print("====================================")
-print("RemindMe App - Version 2.0")
-print("Phase: Notification Hardening & Architecture Enforcement")
+print("RemindMe App - Version 2.0.7")
+print("Phase: Windows OS Notifications")
 print("====================================")
 
 import warnings
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-APP_VERSION = "2.1"
+APP_VERSION = "2.0.7"
+
+# Set Windows AppUserModelID early so toasts group correctly and show the logo
+try:
+    import ctypes as _ctypes
+    _ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("RemindMe.App")
+except Exception:
+    pass
 
 # Fix for "NoneType has no attribute 'write'" in windowed apps
 class DummyStream:
@@ -100,7 +137,11 @@ if sys.stderr is None: sys.stderr = DummyStream()
 
 # Configure basic logging to stdout only for early startup
 from kivy.logger import Logger
-Logger.setLevel(logging.DEBUG)
+Logger.setLevel(logging.INFO)
+
+# Suppress urllib3 debug spam
+logging.getLogger("urllib3").setLevel(logging.WARNING)
+logging.getLogger("urllib3.connectionpool").setLevel(logging.WARNING)
 
 from kivy.config import Config
 # Only set window size if not on Android
@@ -280,12 +321,29 @@ class ReminderApp(MDApp):
                     Permission.POST_NOTIFICATIONS,
                     Permission.WAKE_LOCK,
                     Permission.RECEIVE_BOOT_COMPLETED,
-                    Permission.VIBRATE
+                    Permission.VIBRATE,
+                    Permission.SCHEDULE_EXACT_ALARM,
+                    Permission.FOREGROUND_SERVICE
                 ])
                 # Explicitly init channel for Android 8+
                 self.init_android_notifications()
+                
+                # Start Foreground Service for logic/scheduling
+                try:
+                    from jnius import autoclass
+                    PythonService = autoclass('org.kivy.android.PythonService')
+                    Intent = autoclass('android.content.Intent')
+                    mActivity = autoclass('org.kivy.android.PythonActivity').mActivity
+                    
+                    service_intent = Intent(mActivity, PythonService)
+                    mActivity.startForegroundService(service_intent)
+                    print("Android Foreground Service Started")
+                except Exception as e:
+                    print(f"Failed to start Android service: {e}")
+                    
             except ImportError:
-                print("Android permissions module not available (testing on desktop?)")
+                print("Android permissions/jnius module not available (testing on desktop?)")
+
 
     def init_android_notifications(self):
         """Ensure notification channel exists for Android 8+."""
@@ -395,8 +453,17 @@ class ReminderApp(MDApp):
         pass
 
     def on_notification(self, task_id, title):
+        # 1. In-app notification (dashboard banner)
         self.notification_manager.show_alert("Reminder", f"Task Due: {title}", task_id)
-        # Force UI refresh in dashboard to show 'notified' (RED) state immediately
+
+        # 2. Windows OS-level toast notification (Action Center) — fires in daemon thread
+        try:
+            from utils.notification_service import send_os_notification
+            send_os_notification("RemindMe ⏰", title)
+        except Exception as e:
+            logging.error(f"OS notification failed: {e}")
+
+        # 3. Force UI refresh
         try:
             if self.root.has_screen('dashboard'):
                 self.root.get_screen('dashboard').refresh_tasks(None)
@@ -404,6 +471,7 @@ class ReminderApp(MDApp):
                 self.root.get_screen('calendar_day').fetch_and_render_tasks()
         except Exception as e:
             logging.error(f"UI refresh on notification failed: {e}")
+
 
     def update_theme_colors(self):
         try:

@@ -34,94 +34,89 @@ def correct_typos(text: str) -> str:
 
 def is_task_related(text: str) -> bool:
     """
-    Strict intent classifier that rejects any input not related to task management.
+    Returns False ONLY for confirmed non-task input:
+      - Mathematical expressions
+      - General knowledge questions
+      - Explicit philosophy/science queries
+    Everything else (including location names, activities, short phrases) returns True.
     """
-    text_lower = text.lower()
-    
-    # Mathematical expression blocker
-    if re.search(r'[\+\-\*\/=]\s*\d+', text_lower) and not any(w in text_lower for w in ["buy", "shop", "get", "task", "add", "create"]):
-        return False
-        
-    keyword_whitelist = [
-        "create", "schedule", "reminder", "meeting", "tomorrow", "today", "at",
-        "task", "remind", "buy", "submit", "shopping", "groceries",
-        "study", "school", "class", "exam", "assignment", "book",
-        "gym", "sport", "workout", "run", "shop", "mall", "market", "store",
-        "meet", "work", "office", "client", "call", "email",
-        "doctor", "hospital", "med", "health", "health", "dentist", "appointment",
-        "flight", "trip", "travel", "vacation",
-        "party", "friend", "personal", "family", "home",
-        "am", "pm", "morning", "evening", "night", "hour", "minute"
-    ]
-    
-    # 1. Exact Match Fast-Path
-    if any(word in text_lower for word in keyword_whitelist):
-        return True
-        
-    # 2. PRO-Level Fuzzy Intent Matching for Typos (e.g. "metting", "sportt")
-    try:
-        from rapidfuzz import process
-        words = text_lower.split()
-        for w in words:
-            # Skip noise
-            if len(w) <= 3: 
-                continue
-            
-            # extractOne returns (match_string, score, index)
-            result = process.extractOne(w, keyword_whitelist)
-            if result:
-                match_str, score, _ = result
-                # 80% similarity threshold
-                if score >= 80:
-                    return True
-    except ImportError:
-        print("DEBUG: RapidFuzz not installed. Falling back to strict intent matching.")
-        pass
+    text_lower = text.lower().strip()
 
-    return False
+    # Block math expressions: "2+2", "5*3=", "calculate 10/2"
+    if re.search(r'\b\d+\s*[\+\-\*\/]\s*\d+', text_lower):
+        return False
+
+    # Block explicit general knowledge starts that are clearly off-topic
+    blocked_starts = [
+        "what is the capital",
+        "explain ", "who invented", "who is ", "who was ",
+        "tell me about ", "solve ", "how does gravity",
+        "what causes ", "define ", "history of ",
+        "calculate ", "compute "
+    ]
+    for b in blocked_starts:
+        if text_lower.startswith(b):
+            return False
+
+    # Block sentences that are clearly not tasks (feelings, opinions)
+    non_task_patterns = [
+        r"^i am (bored|sad|happy|tired|okay|fine|good)\b",
+        r"^it is (raining|sunny|hot|cold)\b",
+        r"^the weather\b",
+    ]
+    for p in non_task_patterns:
+        if re.search(p, text_lower):
+            return False
+
+    # Everything else is potentially a task
+    return True
+
 
 def detect_intent(text: str) -> str:
     """
-    Detects if the input is a GREETING, UNRELATED question, or a TASK content.
+    Detects if input is:
+      GREETING   - hi, hello, hey, good morning/evening
+      SMALL_TALK - how are you, what's up
+      UNRELATED  - math, general knowledge questions
+      TASK       - anything else (location, action, activity, single word)
     """
     text = text.strip()
     text_lower = text.lower()
-    
-    # 1. Greetings (Strict)
-    greetings = ["hi", "hello", "hey", "how are you", "good morning", "good evening", "greetings"]
-    pattern = r"^(" + "|".join(re.escape(g) for g in greetings) + r")\b"
-    
-    if re.search(pattern, text_lower):
-        if len(text) < 30 and "task" not in text_lower:
+
+    # 1. Greetings
+    greeting_patterns = [
+        r"^(hi|hello|hey|assalamualaikum|salam)\b",
+        r"^good\s+(morning|evening|afternoon|night)\b",
+    ]
+    for pat in greeting_patterns:
+        if re.search(pat, text_lower):
             return "GREETING"
 
-    # 2. Strict Domain Restriction Guard
+    # 2. Small talk
+    small_talk_patterns = [
+        r"^how are you",
+        r"^how('?re| are) (you|u)\b",
+        r"^what'?s up\b",
+        r"^how('?s| is) it going\b",
+    ]
+    for pat in small_talk_patterns:
+        if re.search(pat, text_lower):
+            return "SMALL_TALK"
+
+    # 3. Only reject confirmed non-task input
     if not is_task_related(text):
         return "UNRELATED"
 
-    # 3. Block Questions / Chatbot queries
-    question_starts = [
-        "what", "who", "explain", "solve", "how", "tell me", "give me", 
-        "help me", "where", "i need advice", "is it", "are we", "can you",
-        "current time", "date", "time", "why", "when", "calculate", "do you",
-        "does", "which"
-    ]
-    if any(text_lower.startswith(k) for k in question_starts):
+    # 4. Question mark at end + question word = likely general question, not a task
+    question_starts = ["what is ", "what are ", "who is ", "who are ",
+                       "explain ", "why is ", "why does ", "where is ",
+                       "how do ", "how does ", "how many ", "how much "]
+    if text_lower.endswith("?") and any(text_lower.startswith(q) for q in question_starts):
         return "UNRELATED"
-        
-    if "how much" in text_lower:
-        return "UNRELATED"
-        
-    if text_lower.endswith("?"):
-        if text_lower.startswith("am i") or text_lower.startswith("do i"):
-             return "UNRELATED"
 
-    # 4. Non-Action Statements
-    non_action_starts = ["i am bored", "i feel", "it is", "today is", "the weather", "i am happy", "i am sad"]
-    if any(text_lower.startswith(k) for k in non_action_starts):
-         return "UNRELATED"
-
+    # 5. Everything else is a TASK (short phrase, location, activity, reminder)
     return "TASK"
+
 
 def infer_category(text: str):
     """
@@ -217,9 +212,8 @@ def parse_date_time_smart(text: str):
         import dateparser
         from dateparser.search import search_dates
     except ImportError:
-        import logging
-        logging.error("dateparser module missing")
-        raise RuntimeError("AI dependency missing: dateparser")
+        dateparser = None
+        search_dates = None
 
     settings = {
         'TIMEZONE': 'local',
@@ -234,9 +228,13 @@ def parse_date_time_smart(text: str):
     parse_text = re.sub(r'\b12:(\d{2})\s*am\b', r'00:\1', parse_text, flags=re.IGNORECASE)
     parse_text = re.sub(r'\b12\s*am\b', r'00:00', parse_text, flags=re.IGNORECASE)
     
-    dt = dateparser.parse(parse_text, settings=settings)
     
-    found = search_dates(parse_text, settings=settings)
+    if dateparser:
+        dt = dateparser.parse(parse_text, settings=settings)
+        found = search_dates(parse_text, settings=settings)
+    else:
+        dt = None
+        found = []
     final_dt = dt
     found_texts = []
     
@@ -304,13 +302,11 @@ def validate_time(text: str, date_ctx):
     try:
         import dateparser
     except ImportError:
-        import logging
-        logging.error("dateparser module missing")
-        raise RuntimeError("AI dependency missing: dateparser")
+        dateparser = None
     if isinstance(date_ctx, float):
         date_ctx = datetime.fromtimestamp(date_ctx)
     parse_text = f"{date_ctx.strftime('%Y-%m-%d')} {text}"
-    dt = dateparser.parse(parse_text)
+    dt = dateparser.parse(parse_text) if dateparser else None
     if not dt:
          return None, False, "Invalid time format. Try '5pm', '17:00', or '9:30 am'."
     dt = dt.replace(year=date_ctx.year, month=date_ctx.month, day=date_ctx.day)
@@ -323,9 +319,7 @@ def extract_task_details(text: str):
     try:
         import dateparser
     except ImportError:
-        import logging
-        logging.error("dateparser module missing")
-        raise RuntimeError("AI dependency missing: dateparser")
+        dateparser = None
     clean_title = correct_typos(text)
     
     # 0. Manual Check for "Next/This/Last Weekday"
@@ -384,7 +378,7 @@ def extract_task_details(text: str):
         if explicit_date_str:
              manual_found_text = explicit_date_str
              # Using 'future' ensures "4 Jan" acts as "Upcoming 4 Jan"
-             manual_dt = dateparser.parse(explicit_date_str, settings={'TIMEZONE': 'local', 'PREFER_DATES_FROM': 'future'})
+             manual_dt = dateparser.parse(explicit_date_str, settings={'TIMEZONE': 'local', 'PREFER_DATES_FROM': 'future'}) if dateparser else None
              
              # Fallback safety bump if 'future' setting failed to bump (rare but possible)
              if manual_dt:
@@ -441,7 +435,7 @@ def extract_task_details(text: str):
         if has_time:
              # Time found but no date -> Default to Today
              final_dt = datetime.now()
-             t_dt = dateparser.parse(text, settings={'TIMEZONE': 'local'})
+             t_dt = dateparser.parse(text, settings={'TIMEZONE': 'local'}) if dateparser else None
              if t_dt:
                  final_dt = final_dt.replace(hour=t_dt.hour, minute=t_dt.minute, second=0, microsecond=0)
              else:

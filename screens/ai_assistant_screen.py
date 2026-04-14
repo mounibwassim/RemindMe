@@ -106,7 +106,7 @@ class AIAssistantScreen(MDScreen):
         
         # Initial Greeting (Only if empty history)
         if not self.chat_list.children:
-             self.add_message("AI", "Hi! I’m here to help you create a task. Please tell me what task you want to add.", token=self.session_token)
+             self.add_message("AI", "Hi, how can I assist you today?", token=self.session_token)
 
     def go_back(self, instance):
         # Reset again just in case
@@ -409,13 +409,19 @@ class AIAssistantScreen(MDScreen):
         
         if intent == "GREETING":
             from kivy.clock import Clock
-            Clock.schedule_once(lambda _dt: self.add_message("AI", "Hi! I’m here to help you create a task. Please tell me what task you want to add.", token=token))
+            Clock.schedule_once(lambda _dt: self.add_message("AI", "Hi, how can I assist you today?", token=token))
+            Clock.schedule_once(lambda _dt: self.reset_flow())
+            return
+
+        if intent == "SMALL_TALK":
+            from kivy.clock import Clock
+            Clock.schedule_once(lambda _dt: self.add_message("AI", "I am good, thank you. How can I assist you today?", token=token))
             Clock.schedule_once(lambda _dt: self.reset_flow())
             return
             
         if intent == "UNRELATED":
             from kivy.clock import Clock
-            Clock.schedule_once(lambda _dt: self.add_message("AI", "⚠️ This assistant is only for task creation and management.", token=token))
+            Clock.schedule_once(lambda _dt: self.add_message("AI", "Sorry, this assistant is designed only for creating tasks and reminders. Please tell me what task you would like to create.", token=token))
             Clock.schedule_once(lambda _dt: self.reset_flow())
             return
 

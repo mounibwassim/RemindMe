@@ -111,8 +111,7 @@ class ForgotPasswordScreen(MDScreen):
         t.start()
         
     def _reset_logic_thread(self, username_input):
-        from backend.auth_service import get_username_data
-        from backend.firebase_service import reset_password_email
+        from backend.firebase_service import get_username_data, reset_password_email
         
         cloud_data, fetch_error = get_username_data(username_input)
         email = None

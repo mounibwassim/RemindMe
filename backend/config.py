@@ -16,7 +16,7 @@ FIREBASE_CONFIG = {
   "measurementId": "G-2X31N67E8Q"
 }
 
-FIREBASE_DATABASE_URL = "https://remindme-mounib-default-rtdb.firebaseio.com/"
+FIREBASE_DATABASE_URL = "https://remindme-mounib-default-rtdb.asia-southeast1.firebasedatabase.app"
 
 # SMTP Email Configuration
 # Update these with your actual SMTP details (e.g., Gmail, Outlook)

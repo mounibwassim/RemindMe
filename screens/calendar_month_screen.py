@@ -15,82 +15,53 @@ from kivymd.uix.floatlayout import MDFloatLayout
 from backend.storage import list_tasks
 from backend.crypto import decrypt_bytes
 
-class CalendarCell(MDFloatLayout):
-    def __init__(self, day, count, is_today, on_press_callback, **kwargs):
-        super().__init__(**kwargs)
-        self.day = day
-        self.count = count
-        self.is_today = is_today
-        self.callback = on_press_callback
-        
-        # Background Logic
-        with self.canvas.before:
-            if is_today:
-                Color(0.2, 0.6, 1, 0.3) # Light Blue
-            else:
-                app = App.get_running_app()
-                if app.theme_cls.theme_style == "Dark":
-                    Color(0.2, 0.2, 0.2, 1)
-                else:
-                    Color(0.95, 0.95, 0.95, 1)
-            self.rect = Rectangle(pos=self.pos, size=self.size)
-            
-        self.bind(pos=self.update_rect, size=self.update_rect)
-        
-        app = App.get_running_app()
-        is_dark = (app.theme_cls.theme_style == "Dark")
-        text_col = (1,1,1,1) if is_dark else (0,0,0,1)
+class CalendarCell(object):
+    """
+    Factory function - returns a Button widget configured as a calendar day cell.
+    A Button is used because it reliably renders markup text in Kivy.
+    """
+    pass  # replaced below
 
-        # Day Number - Pinned to TOP CENTER with larger font
-        self.add_widget(MDLabel(
-            text=str(day), 
-            halign="center", 
-            font_size="20sp", # Google-style readable numbers
-            bold=True,
-            theme_text_color="Custom",
-            text_color=text_col,
-            pos_hint={'center_x': 0.5, 'top': 0.95},
-            size_hint_y=None,
-            height=dp(35)
-        ))
-        
-        # Task Badge - Pinned to BOTTOM CENTER
-        if count > 0:
-            badge = MDLabel(
-                text=f"{count}",
-                halign="center",
-                font_style="Caption",
-                theme_text_color="Custom",
-                text_color=(1, 1, 1, 1),
-                size_hint=(None, None),
-                size=(dp(24), dp(24)),
-                pos_hint={'center_x': 0.5, 'y': 0.1}
-            )
-            # Badge Background
-            with badge.canvas.before:
-                Color(0.2, 0.6, 1, 1) # Blue
-                RoundedRectangle(pos=badge.pos, size=badge.size, radius=[12])
-                
-            def update_badge_bg(instance, value):
-                instance.canvas.before.clear()
-                with instance.canvas.before:
-                    Color(0.2, 0.6, 1, 1)
-                    RoundedRectangle(pos=instance.pos, size=instance.size, radius=[instance.height/2.0])
-            badge.bind(pos=update_badge_bg, size=update_badge_bg)
-            
-            self.add_widget(badge)
+def make_calendar_cell(day, count, is_today, on_press_callback):
+    from kivy.uix.button import Button
+    from kivy.app import App
+    app = App.get_running_app()
+    is_dark = (app.theme_cls.theme_style == "Dark")
+    pri = app.theme_cls.primary_color
 
-        self.bind(on_touch_down=self.on_touch)
+    if is_today:
+        bg    = (*pri[:3], 0.30)
+        fg    = (1, 1, 1, 1)
+    elif is_dark:
+        bg = (0.18, 0.18, 0.18, 1)
+        fg = (1, 1, 1, 1)
+    else:
+        bg = (0.93, 0.93, 0.93, 1)
+        fg = (0.05, 0.05, 0.05, 1)
 
-    def update_rect(self, *args):
-        self.rect.pos = self.pos
-        self.rect.size = self.size
+    num_tasks = count if isinstance(count, int) else (len(count) if count else 0)
 
-    def on_touch(self, instance, touch):
-        if self.collide_point(*touch.pos):
-            self.callback(self.day)
-            return True
-        return False
+    if num_tasks > 0:
+        pri_hex = "#%02x%02x%02x" % (int(pri[0]*255), int(pri[1]*255), int(pri[2]*255))
+        cell_text = f"[b]{day}[/b]\n[size=9][color={pri_hex}]+{num_tasks} Tasks[/color][/size]"
+    else:
+        cell_text = f"[b]{day}[/b]"
+
+    btn = Button(
+        text=cell_text,
+        markup=True,
+        halign="left",
+        valign="top",
+        background_color=bg,
+        background_normal="",
+        color=fg,
+        font_size="14sp",
+        padding=[4, 2]
+    )
+    btn.bind(size=btn.setter("text_size"))
+    btn.bind(on_release=lambda b: on_press_callback(day))
+    return btn
+
 
 class CalendarMonthScreen(MDScreen):
     def __init__(self, **kwargs):
@@ -171,7 +142,7 @@ class CalendarMonthScreen(MDScreen):
         main_layout.add_widget(month_header)
 
         # 3. Days of week header
-        days_header = GridLayout(cols=7, size_hint_y=None, height=dp(40))
+        days_header = GridLayout(cols=7, size_hint_y=None, height=dp(55))
         days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
         for day in days:
             days_header.add_widget(MDLabel(
@@ -185,7 +156,7 @@ class CalendarMonthScreen(MDScreen):
 
         # 4. Grid Container (75-85% height logic achieved by giving it size_hint=1)
         grid_container = MDBoxLayout(padding=dp(10))
-        self.grid = GridLayout(cols=7, spacing=dp(10)) # 8-12dp spacing requirement
+        self.grid = MDBoxLayout(orientation="vertical", spacing=dp(10)) # 8-12dp spacing requirement
         
         self.refresh_grid()
         
@@ -206,22 +177,26 @@ class CalendarMonthScreen(MDScreen):
         today = datetime.now()
         
         for week in cal:
+            row = MDBoxLayout(orientation="horizontal", spacing=dp(10), size_hint_y=None, height=dp(55))
             for day in week:
                 if day == 0:
                     # Empty cell
-                    self.grid.add_widget(MDBoxLayout())
+                    row.add_widget(MDBoxLayout(size_hint_y=None, height=dp(55)))
                 else:
                     is_today = (day == today.day and month == today.month and year == today.year)
                     key = f"{year}-{month:02d}-{day:02d}"
                     count = len(tasks_doc.get(key, []))
                     
-                    cell = CalendarCell(
+                    cell = make_calendar_cell(
                         day=day, 
                         count=count, 
                         is_today=is_today,
                         on_press_callback=self.on_day_press
                     )
-                    self.grid.add_widget(cell)
+                    cell.size_hint_y = None
+                    cell.height = dp(55)
+                    row.add_widget(cell)
+            self.grid.add_widget(row)
 
     def prev_month(self, instance):
         first = self.current_date.replace(day=1)

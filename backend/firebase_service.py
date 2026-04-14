@@ -134,7 +134,8 @@ def save_username_mapping(username, email, uid, metadata=None):
     """
     Save username to email mapping and optional encryption metadata in Realtime DB.
     """
-    url = f"{FIREBASE_DATABASE_URL}usernames/{username}.json"
+    base_url = FIREBASE_DATABASE_URL.rstrip('/')
+    url = f"{base_url}/usernames/{username}.json"
     payload = {"email": email, "uid": uid}
     if metadata:
         payload["metadata"] = metadata
@@ -146,66 +147,57 @@ def save_username_mapping(username, email, uid, metadata=None):
 
 def get_username_data(username):
     """
-    Fetch all data for a given username from cloud.
+    Fetch all data for a given username or email from cloud.
     Reads from Firestore (primary store) with RTDB as fallback.
     """
-    username_lower = username.strip().lower()
+    query_val = username.strip().lower()
+    is_email = "@" in query_val
+    search_field = "email" if is_email else "username"
     
-    # --- 1. Try Firestore first (primary store) ---
+    # --- 1. Firestore Bypass (Disabled due to persistent 403 errors) ---
+    """
     try:
-        fs_url = f"https://firestore.googleapis.com/v1/projects/remindme-mounib/databases/(default)/documents:runQuery?key={FIREBASE_WEB_API_KEY}"
-        payload = {
-            "structuredQuery": {
-                "from": [{"collectionId": "users"}],
-                "where": {
-                    "fieldFilter": {
-                        "field": {"fieldPath": "username"},
-                        "op": "EQUAL",
-                        "value": {"stringValue": username_lower}
-                    }
-                }
-            }
-        }
-        r = requests.post(fs_url, json=payload)
-        print(f"Firestore login lookup: status={r.status_code}")
-        if r.status_code == 200:
-            data = r.json()
-            if isinstance(data, list) and len(data) > 0:
-                doc = data[0].get("document")
-                if doc and "fields" in doc:
-                    fields = doc["fields"]
-                    result = {k: list(v.values())[0] for k, v in fields.items()}
-                    if "metadata" in result and isinstance(result["metadata"], str):
-                        try:
-                            result["metadata"] = json.loads(result["metadata"])
-                        except:
-                            pass
-                    doc_name = doc.get("name", "")
-                    result["uid"] = doc_name.split("/")[-1] if doc_name else ""
-                    print(f"Firestore: found user {username_lower}")
-                    return result, None
-        print("Firestore: user not found, falling back to RTDB")
+        # Firestore is currently returning 403 Forbidden. Skipping to RTDB fallback.
+        pass
     except Exception as e:
-        print(f"Firestore lookup failed: {e}")
+        print(f"Firestore lookup skipped: {e}")
+    """
 
     # --- 2. RTDB fallback ---
     try:
-        url = f"{FIREBASE_DATABASE_URL}usernames/{username_lower}.json"
-        r = requests.get(url)
+        if is_email:
+            # RTDB is indexed by username, searching by email in RTDB is slow/inefficient 
+            # unless we have a mapping. For now, we try to use the username retrieval.
+            # If the user entered an email, we can't easily find them in RTDB 'usernames/' 
+            # node which is keyed by username. 
+            print("RTDB: Email-based search in RTDB fallback is limited.")
+            return None, "Firestore is restricted and email search is not indexed in RTDB fallback."
+            
+        # Ensure base URL has no trailing slash and path has leading slash
+        base_url = FIREBASE_DATABASE_URL.rstrip('/')
+        url = f"{base_url}/usernames/{query_val}.json"
+        
+        r = requests.get(url, timeout=5)
+        if r.status_code != 200:
+             print(f"RTDB: Database error or node not found (Status {r.status_code})")
+             return None, "USER_NOT_FOUND"
+
         data = r.json()
-        if data and not isinstance(data, str):
-            print(f"RTDB: found user {username_lower}")
-            return data, None
-        # Try exact case as fallback
-        url2 = f"{FIREBASE_DATABASE_URL}usernames/{username}.json"
-        r2 = requests.get(url2)
-        data2 = r2.json()
-        if data2 and not isinstance(data2, str):
-            print(f"RTDB (original case): found user {username}")
-            return data2, None
-        return None, "Username not found in cloud."
+        if data and isinstance(data, dict):
+            if "error" in data:
+                print(f"RTDB: API Error: {data['error']}")
+                return None, "USER_NOT_FOUND"
+                
+            if "email" in data:
+                print(f"RTDB: found user {query_val}")
+                return data, None
+            else:
+                print(f"RTDB: node {query_val} exists but is not a user (missing email).")
+                return None, "Cloud data corrupted: missing email."
+            
+        return None, "USER_NOT_FOUND"
     except Exception as e:
-        return None, str(e)
+        return None, f"Cloud lookup failed: {str(e)}"
 
 def update_profile(id_token, display_name):
     """

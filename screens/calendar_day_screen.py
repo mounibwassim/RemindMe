@@ -223,11 +223,17 @@ class CalendarDayScreen(MDScreen):
         
         # Start Red Line update loop
         from kivy.clock import Clock
-        Clock.schedule_interval(self.update_time_line, 30)
+        if hasattr(self, 'time_line_event') and self.time_line_event:
+            self.time_line_event.cancel()
+            
+        self.time_line_event = Clock.schedule_interval(self.update_time_line, 30)
         Clock.schedule_once(self.update_time_line)
 
     def fetch_and_render_tasks(self):
         # Clear existing tasks
+        if not hasattr(self, 'hour_rows'):
+            return  # Screen not loaded yet
+
         for h in range(24):
             self.hour_rows[h].content_container.clear_widgets()
 
