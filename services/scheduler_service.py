@@ -1,10 +1,10 @@
 try:
-    from jnius import autoclass
+    from jnius import autoclass # type: ignore
 except ImportError:
     autoclass = None
 
 try:
-    from android.storage import app_storage_path
+    from android.storage import app_storage_path # type: ignore
 except ImportError:
     app_storage_path = None
 
