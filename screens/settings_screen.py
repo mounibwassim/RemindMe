@@ -39,7 +39,7 @@ class SettingsScreen(MDScreen):
             size_hint_y=None, 
             height=dp(80), 
             radius=[0, 0, 20, 20], 
-            elevation=4,
+            elevation=0,
             md_bg_color=app.theme_cls.primary_color
         )
         

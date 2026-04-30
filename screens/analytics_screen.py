@@ -84,7 +84,7 @@ class AnalyticsScreen(MDScreen):
             size_hint_y=None, 
             height=dp(100), 
             radius=[0, 0, 20, 20], 
-            elevation=4,
+            elevation=0,
             md_bg_color=App.get_running_app().theme_cls.primary_color
         )
         
@@ -185,7 +185,7 @@ class AnalyticsScreen(MDScreen):
         # 2. WEEKLY PROGRESS CHARTS
         self.content_box.add_widget(MDLabel(text="Weekly Progress", font_style="H6", bold=True, size_hint_y=None, height=dp(30), theme_text_color="Custom", text_color=text_primary))
         
-        chart_card = MDCard(orientation="vertical", size_hint_y=None, height=dp(250), radius=[15], elevation=2, padding=dp(15))
+        chart_card = MDCard(orientation="vertical", size_hint_y=None, height=dp(250), radius=[15], elevation=0, padding=dp(15))
         chart_card.md_bg_color = card_bg
         
         nav = MDBoxLayout(size_hint_y=None, height=dp(40))
@@ -219,7 +219,7 @@ class AnalyticsScreen(MDScreen):
             size_hint_y=None, 
             height=dp(100), 
             radius=[15], 
-            elevation=1, 
+            elevation=0, 
             padding=dp(15),
             on_release=self.go_to_ai
         )
@@ -284,7 +284,7 @@ class AnalyticsScreen(MDScreen):
         return insight_text
 
     def create_summary_card(self, title, value, icon, bg_color, text_color):
-        card = MDCard(orientation="vertical", size_hint=(None, None), size=(dp(100), dp(100)), radius=[12], elevation=2, padding=dp(10))
+        card = MDCard(orientation="vertical", size_hint=(None, None), size=(dp(100), dp(100)), radius=[12], elevation=0, padding=dp(10))
         card.md_bg_color = bg_color
         
         from kivymd.uix.label import MDIcon
@@ -295,7 +295,7 @@ class AnalyticsScreen(MDScreen):
         return card
 
     def create_prio_card(self, title, value, color, bg_color, text_color):
-        card = MDCard(orientation="vertical", size_hint_y=None, height=dp(80), radius=[12], elevation=2, padding=dp(10))
+        card = MDCard(orientation="vertical", size_hint_y=None, height=dp(80), radius=[12], elevation=0, padding=dp(10))
         card.md_bg_color = bg_color
         
         from kivymd.uix.label import MDIcon

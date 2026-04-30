@@ -63,7 +63,7 @@ class CreateTaskScreen(MDScreen):
         # --- HEADER (Blue Frame) ---
         header = MDCard(
             size_hint_y=None, height=dp(80),
-            radius=[0, 0, 20, 20], elevation=4,
+            radius=[0, 0, 20, 20], elevation=0,
             md_bg_color=self.app.theme_cls.primary_color
         )
         h_box = MDBoxLayout(padding=[dp(10), 0], spacing=dp(5))

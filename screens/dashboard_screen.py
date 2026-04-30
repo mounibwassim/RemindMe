@@ -29,7 +29,7 @@ class TaskCard(ClickableCard):
         self.radius = [12]
         self.padding = 0 # Padding handled by inner boxes
         self.spacing = 0
-        self.elevation = 1 
+        self.elevation=0 
         
         self.task_id = task_id
         self.app = app
@@ -233,7 +233,7 @@ class DashboardScreen(MDScreen):
         layout1 = MDBoxLayout(orientation="vertical")
         
         # Header (Theme-aware)
-        header1 = MDCard(size_hint_y=None, height=dp(80), radius=[0, 0, 20, 20], elevation=4, md_bg_color=App.get_running_app().theme_cls.primary_color)
+        header1 = MDCard(size_hint_y=None, height=dp(80), radius=[0, 0, 20, 20], elevation=0, md_bg_color=App.get_running_app().theme_cls.primary_color)
         h1 = MDBoxLayout(orientation="horizontal", padding=[dp(10), 0], spacing=dp(10))
         
         # 🟢 ADDED: Application Logo
@@ -322,7 +322,7 @@ class DashboardScreen(MDScreen):
         layout3 = MDBoxLayout(orientation="vertical")
         
         # Header (Blue)
-        header3 = MDCard(size_hint_y=None, height=dp(80), radius=[0, 0, 20, 20], elevation=4, md_bg_color=App.get_running_app().theme_cls.primary_color)
+        header3 = MDCard(size_hint_y=None, height=dp(80), radius=[0, 0, 20, 20], elevation=0, md_bg_color=App.get_running_app().theme_cls.primary_color)
         h3 = MDBoxLayout(orientation="horizontal", padding=[dp(10), 0], spacing=dp(10))
         
         # 🟢 ADDED: Application Logo

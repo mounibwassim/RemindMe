@@ -58,7 +58,7 @@ class ForgotPasswordScreen(MDScreen):
             height=dp(250),
             pos_hint={"center_x": 0.5, "center_y": 0.5},
             radius=[20],
-            elevation=2,
+            elevation=0,
             padding=dp(20),
             orientation='vertical',
             md_bg_color=App.get_running_app().theme_cls.bg_normal

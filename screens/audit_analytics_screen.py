@@ -44,7 +44,7 @@ class ModernAnalyticsCard(ClickableCard):
         self.padding = dp(16)
         self.spacing = dp(8)
         self.radius = [16]
-        self.elevation = 0  # Disable elevation to prevent KivyMD shadow bugs
+        self.elevation=0  # Disable elevation to prevent KivyMD shadow bugs
         
         # Theme check
         app = App.get_running_app()
@@ -242,12 +242,12 @@ class AuditAnalyticsScreen(MDScreen):
             if hasattr(self, 'btn_weekly'):
                 self.btn_weekly.md_bg_color = active_color
                 self.btn_weekly.text_color = (1, 1, 1, 1)
-                self.btn_weekly.elevation = 6
+                self.btn_weekly.elevation=0
                 self.btn_weekly.icon_color = (1, 1, 1, 1)
                 
                 self.btn_monthly.md_bg_color = inactive_color
                 self.btn_monthly.text_color = inactive_text
-                self.btn_monthly.elevation = 0
+                self.btn_monthly.elevation=0
                 self.btn_monthly.icon_color = inactive_text
         else:
             month_name = now.strftime("%B")
@@ -259,12 +259,12 @@ class AuditAnalyticsScreen(MDScreen):
             if hasattr(self, 'btn_monthly'):
                 self.btn_monthly.md_bg_color = active_color
                 self.btn_monthly.text_color = (1, 1, 1, 1)
-                self.btn_monthly.elevation = 6
+                self.btn_monthly.elevation=0
                 self.btn_monthly.icon_color = (1, 1, 1, 1)
                 
                 self.btn_weekly.md_bg_color = inactive_color
                 self.btn_weekly.text_color = inactive_text
-                self.btn_weekly.elevation = 0
+                self.btn_weekly.elevation=0
                 self.btn_weekly.icon_color = inactive_text
 
         # Fetch Stats from Local SQL
@@ -376,7 +376,7 @@ class AuditAnalyticsScreen(MDScreen):
         root.md_bg_color = self.app.theme_cls.bg_normal
         
         # --- HEADER ---
-        header_card = MDCard(size_hint_y=None, height=dp(60), elevation=3)
+        header_card = MDCard(size_hint_y=None, height=dp(60), elevation=0)
         header_card.radius = [0, 0, 20, 20]
         header_card.md_bg_color = self.app.theme_cls.primary_color
         

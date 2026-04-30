@@ -42,9 +42,31 @@ def run_service():
     try:
         if autoclass:
             PythonService = autoclass('org.kivy.android.PythonService')
+            # 🔴 CRITICAL: Android 12+ requires startForeground to be called by the service itself
+            NotificationBuilder = autoclass('android.app.Notification$Builder')
+            NotificationChannel = autoclass('android.app.NotificationChannel')
+            NotificationManager = autoclass('android.app.NotificationManager')
+            Context = autoclass('android.content.Context')
+            
+            # Use the same channel as main app
+            channel_id = 'remindme_service_channel'
+            channel = NotificationChannel(channel_id, 'RemindMe Background Service', 2) # Importance LOW
+            
+            notification_service = PythonService.mService.getSystemService(Context.NOTIFICATION_SERVICE)
+            notification_service.createNotificationChannel(channel)
+            
+            # Create a minimal notification for the service
+            notification_builder = NotificationBuilder(PythonService.mService, channel_id)
+            notification_builder.setContentTitle("RemindMe Scheduler")
+            notification_builder.setContentText("Monitoring your upcoming tasks...")
+            notification_builder.setSmallIcon(PythonService.mService.getApplicationInfo().icon)
+            
+            # ID must be > 0
+            PythonService.mService.startForeground(1001, notification_builder.build())
             PythonService.mService.setAutoRestartService(True)
-    except:
-        pass
+            print("Foreground Service Notification Started")
+    except Exception as e:
+        print(f"Failed to start foreground notification: {e}")
     
     while True:
         try:

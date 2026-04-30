@@ -54,7 +54,7 @@ class LoginScreen(MDScreen):
             font_style="H4", # Reduced size to fit logo
             theme_text_color="Custom",
             text_color=(1, 1, 1, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.85}, 
+            pos_hint={"center_x": 0.5, "center_y": 0.84}, 
             halign="center",
             bold=True
         ))
@@ -64,7 +64,7 @@ class LoginScreen(MDScreen):
             font_style="Subtitle1",
             theme_text_color="Custom",
             text_color=(0.9, 0.9, 0.9, 1),
-            pos_hint={"center_x": 0.5, "center_y": 0.86}, # Moved UP to be clearly visible
+            pos_hint={"center_x": 0.5, "center_y": 0.79}, # Moved DOWN to prevent clashing
             halign="center"
         ))
         
@@ -75,7 +75,7 @@ class LoginScreen(MDScreen):
             height=dp(400),
             pos_hint={"center_x": 0.5, "center_y": 0.5},
             radius=[20],
-            elevation=1,
+            elevation=0,
             padding=dp(20),
             md_bg_color=App.get_running_app().theme_cls.bg_normal
         )

@@ -393,19 +393,51 @@ def extract_task_details(text: str):
     
     final_dt = standard_dt
     
-    # 2. Override with Manual logic
+    # 2. Merge Manual logic (Next Fri, etc.)
     if manual_dt:
         final_dt = manual_dt
-        # MERGE TIME from standard_dt if available and not a dictionary
+        # Merge time from standard_dt if available
         if has_time and standard_dt and not isinstance(standard_dt, dict):
             final_dt = final_dt.replace(hour=standard_dt.hour, minute=standard_dt.minute, second=0, microsecond=0)
         else:
+            # Default to 00:00 if no time found
             final_dt = final_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-
-        # Append found text so it gets stripped
         found_texts.append(manual_found_text)
 
-    # 3. Clean Title
+    # 3. Explicit Time Extraction Override (Ensures 3 pm, 9 am are caught even if mixed)
+    if has_time:
+        # Match "9 am", "3pm", "15:00", "3:30 pm"
+        time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', text, re.IGNORECASE)
+        if not time_match:
+            # Fallback for "at 9" or "at 15"
+            time_match = re.search(r'\bat\s+(\d{1,2})(?::(\d{2}))?\b', text, re.IGNORECASE)
+            
+        if time_match:
+            try:
+                groups = time_match.groups()
+                h = int(groups[0])
+                m = int(groups[1]) if groups[1] else 0
+                p = groups[2].lower() if len(groups) > 2 and groups[2] else None
+                
+                if p == 'pm' and h < 12: h += 12
+                elif p == 'am' and h == 12: h = 0
+                elif not p and h < 7: # Heuristic: if no am/pm and small number like "at 3", assume PM
+                     h += 12
+                
+                if final_dt and not isinstance(final_dt, dict):
+                    final_dt = final_dt.replace(hour=h, minute=m, second=0, microsecond=0)
+                    
+                    # If the resulting time is in the past and no date was specifically mentioned, push to tomorrow
+                    now = datetime.now()
+                    if final_dt < now and not manual_dt:
+                        # Check if any date keyword was in the text
+                        date_keywords = ["tomorrow", "next", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+                        if not any(k in text.lower() for k in date_keywords):
+                            final_dt += timedelta(days=1)
+            except:
+                pass
+
+    # 4. Clean Title
     prefixes = [r"i want to\s+", r"i need to\s+", r"remind me to\s+", r"please\s+", r"create task\s+"]
     for p in prefixes:
         clean_title = re.sub(p, "", clean_title, flags=re.IGNORECASE)
@@ -447,8 +479,6 @@ def extract_task_details(text: str):
     now = datetime.now()
     if has_time and not date_mentioned and not manual_dt:
         final_dt = final_dt.replace(year=now.year, month=now.month, day=now.day)
-
-    return clean_title, final_dt, has_time, None
 
     return clean_title, final_dt, has_time, None
 

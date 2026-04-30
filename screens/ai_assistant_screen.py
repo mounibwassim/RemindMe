@@ -51,7 +51,7 @@ class AIAssistantScreen(MDScreen):
         layout.md_bg_color = self.app.theme_cls.bg_normal
         
         # --- HEADER ---
-        header_card = MDCard(size_hint_y=None, height=dp(80), elevation=4)
+        header_card = MDCard(size_hint_y=None, height=dp(80), elevation=0)
         header_card.radius = [0, 0, 20, 20]
         header_card.md_bg_color = self.app.theme_cls.primary_color
         
@@ -474,6 +474,6 @@ class AIAssistantScreen(MDScreen):
         self.reset_flow()
         
         # Refresh Dashboard
-        if self.app.sm.has_screen("dashboard"):
-            self.app.sm.get_screen("dashboard").refresh_tasks(None)
+        if self.app.root.has_screen("dashboard"):
+            self.app.root.get_screen("dashboard").refresh_tasks(None)
 
