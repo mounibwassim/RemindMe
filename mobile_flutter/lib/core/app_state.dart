@@ -22,7 +22,7 @@ class AppState extends ChangeNotifier {
       return explicitUrl;
     }
     if (kReleaseMode) {
-      return 'https://api-remindme.onrender.com';
+      return 'https://remindme-backend-k9mb.onrender.com';
     }
     if (kIsWeb) {
       return 'http://localhost:8000';
@@ -213,7 +213,19 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     
     final prefs = await SharedPreferences.getInstance();
-    final customUrl = prefs.getString('custom_api_url');
+    String? customUrl = prefs.getString('custom_api_url');
+    if (customUrl != null) {
+      final normalized = customUrl.trim().toLowerCase();
+      if (normalized == 'https://remindme.onrender.com' ||
+          normalized == 'http://remindme.onrender.com' ||
+          normalized == 'https://api-remindme.onrender.com' ||
+          normalized == 'http://api-remindme.onrender.com') {
+        await prefs.remove('custom_api_url');
+        customUrl = null;
+        debugPrint('AppState: Cleared defunct cached custom API URL.');
+      }
+    }
+
     if (customUrl != null && customUrl.isNotEmpty) {
       api.baseUrl = customUrl;
       debugPrint('AppState: Using custom API URL: ${api.baseUrl}');
@@ -223,7 +235,7 @@ class AppState extends ChangeNotifier {
       if (explicitUrl.isNotEmpty) {
         api.baseUrl = explicitUrl;
       } else if (kReleaseMode) {
-        api.baseUrl = 'https://api-remindme.onrender.com';
+        api.baseUrl = 'https://remindme-backend-k9mb.onrender.com';
       } else if (kIsWeb) {
         api.baseUrl = 'http://localhost:8000';
       } else {
@@ -240,7 +252,7 @@ class AppState extends ChangeNotifier {
           }
         } catch (e) {
           debugPrint('AppState: Android emulator local backend unreachable: $e. Using production backend fallback.');
-          api.baseUrl = 'https://api-remindme.onrender.com';
+          api.baseUrl = 'https://remindme-backend-k9mb.onrender.com';
         }
       }
     }
@@ -928,7 +940,7 @@ class AppState extends ChangeNotifier {
   Future<void> changeApiBaseUrl(String newUrl) async {
     final prefs = await SharedPreferences.getInstance();
     final url = newUrl.trim();
-    if (url.isEmpty || url == 'https://api-remindme.onrender.com') {
+    if (url.isEmpty || url == 'https://remindme-backend-k9mb.onrender.com') {
       await prefs.remove('custom_api_url');
     } else {
       await prefs.setString('custom_api_url', url);
