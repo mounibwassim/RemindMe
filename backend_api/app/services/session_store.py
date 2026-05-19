@@ -9,7 +9,14 @@ from backend.crypto import derive_key, gen_salt, load_salt_for, save_salt_for
 from backend.storage import init_db_for
 
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
+def _find_project_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "backend_api").exists():
+            return parent
+    return current.parent.parent.parent.parent
+
+ROOT_DIR = _find_project_root()
 DATA_DIR = ROOT_DIR / "backend_api" / "data"
 SESSIONS_FILE = DATA_DIR / "active_sessions.json"
 SESSIONS: dict[str, "UserSession"] = {}

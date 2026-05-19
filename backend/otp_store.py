@@ -5,7 +5,14 @@ import hashlib
 import secrets
 from pathlib import Path
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
+def _find_project_root() -> Path:
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        if (parent / "backend_api").exists():
+            return parent
+    return current.parent.parent
+
+ROOT_DIR = _find_project_root()
 DATA_DIR = ROOT_DIR / "backend_api" / "data"
 DB_PATH = DATA_DIR / "otps.db"
 
