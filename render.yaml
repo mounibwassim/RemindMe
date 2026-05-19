@@ -3,7 +3,7 @@ services:
     name: remindme-backend
     env: docker
     dockerfilePath: backend_api/Dockerfile
-    dockerContext: backend_api
+    dockerContext: .
     plan: free
     numInstances: 1
     envVars:
