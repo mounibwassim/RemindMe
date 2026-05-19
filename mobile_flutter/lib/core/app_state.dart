@@ -40,7 +40,7 @@ class AppState extends ChangeNotifier {
   String? email;
   String? username;
   String? avatarEmoji;
-  
+
   bool isLoading = false;
   String? errorMessage;
   String? successMessage;
@@ -107,14 +107,17 @@ class AppState extends ChangeNotifier {
   Future<void> initNotifications() async {
     final prefs = await SharedPreferences.getInstance();
     await _notifications.init();
-    
-    final requestedBefore = prefs.getBool('has_requested_notifications') ?? false;
+
+    final requestedBefore =
+        prefs.getBool('has_requested_notifications') ?? false;
     if (!requestedBefore) {
-      debugPrint('AppState: Triggering first-time notification permission request...');
+      debugPrint(
+          'AppState: Triggering first-time notification permission request...');
       await _notifications.requestPermissions();
       await prefs.setBool('has_requested_notifications', true);
     } else {
-      debugPrint('AppState: Notifications already requested before, checking current status...');
+      debugPrint(
+          'AppState: Notifications already requested before, checking current status...');
       await _notifications.checkPermissions();
     }
   }
@@ -144,7 +147,7 @@ class AppState extends ChangeNotifier {
       await prefs.remove('email');
       await prefs.remove('username');
       await prefs.remove('avatar_emoji');
-      
+
       // Clean up cache on logout
       await prefs.remove('cached_tasks');
       await prefs.remove('cached_analytics');
@@ -163,29 +166,31 @@ class AppState extends ChangeNotifier {
   Future<void> _loadLocalCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      
+
       final tasksStr = prefs.getString('cached_tasks');
       if (tasksStr != null) {
         final List<dynamic> decoded = jsonDecode(tasksStr);
-        tasks = _sortTasks(decoded.map((json) => TaskItem.fromJson(json)).toList());
+        tasks =
+            _sortTasks(decoded.map((json) => TaskItem.fromJson(json)).toList());
       }
-      
+
       final analyticsStr = prefs.getString('cached_analytics');
       if (analyticsStr != null) {
         analytics = AnalyticsSummary.fromJson(jsonDecode(analyticsStr));
       }
-      
+
       final auditStr = prefs.getString('cached_audit_logs');
       if (auditStr != null) {
         final List<dynamic> decoded = jsonDecode(auditStr);
         auditLogs = decoded.map((json) => AuditLog.fromJson(json)).toList();
       }
-      
+
       final queueStr = prefs.getString('offline_mutation_queue');
       if (queueStr != null) {
-        _offlineMutationQueue = List<Map<String, dynamic>>.from(jsonDecode(queueStr));
+        _offlineMutationQueue =
+            List<Map<String, dynamic>>.from(jsonDecode(queueStr));
       }
-      
+
       notifyListeners();
     } catch (e) {
       debugPrint('AppState: Failed to load local cache: $e');
@@ -195,12 +200,16 @@ class AppState extends ChangeNotifier {
   Future<void> _saveLocalCache() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('cached_tasks', jsonEncode(tasks.map((t) => t.toJson()).toList()));
+      await prefs.setString(
+          'cached_tasks', jsonEncode(tasks.map((t) => t.toJson()).toList()));
       if (analytics != null) {
-        await prefs.setString('cached_analytics', jsonEncode(analytics!.toJson()));
+        await prefs.setString(
+            'cached_analytics', jsonEncode(analytics!.toJson()));
       }
-      await prefs.setString('cached_audit_logs', jsonEncode(auditLogs.map((a) => a.toJson()).toList()));
-      await prefs.setString('offline_mutation_queue', jsonEncode(_offlineMutationQueue));
+      await prefs.setString('cached_audit_logs',
+          jsonEncode(auditLogs.map((a) => a.toJson()).toList()));
+      await prefs.setString(
+          'offline_mutation_queue', jsonEncode(_offlineMutationQueue));
     } catch (e) {
       debugPrint('AppState: Failed to save local cache: $e');
     }
@@ -211,7 +220,7 @@ class AppState extends ChangeNotifier {
   Future<void> performWarmupCheck() async {
     isWarmingUp = true;
     notifyListeners();
-    
+
     final prefs = await SharedPreferences.getInstance();
     String? customUrl = prefs.getString('custom_api_url');
     if (customUrl != null) {
@@ -242,16 +251,19 @@ class AppState extends ChangeNotifier {
         // In mobile debug/profile modes, check if the local emulator FastAPI server is reachable
         debugPrint('AppState: Probing dev environment reachability...');
         try {
-          final localPing = await http.get(Uri.parse('http://10.0.2.2:8000/health'))
+          final localPing = await http
+              .get(Uri.parse('http://10.0.2.2:8000/health'))
               .timeout(const Duration(milliseconds: 1500));
           if (localPing.statusCode == 200) {
             api.baseUrl = 'http://10.0.2.2:8000';
-            debugPrint('AppState: Android emulator local backend detected at ${api.baseUrl}');
+            debugPrint(
+                'AppState: Android emulator local backend detected at ${api.baseUrl}');
           } else {
             throw Exception('Localhost status ${localPing.statusCode}');
           }
         } catch (e) {
-          debugPrint('AppState: Android emulator local backend unreachable: $e. Using production backend fallback.');
+          debugPrint(
+              'AppState: Android emulator local backend unreachable: $e. Using production backend fallback.');
           api.baseUrl = 'https://remindme-backend-k9mb.onrender.com';
         }
       }
@@ -259,22 +271,27 @@ class AppState extends ChangeNotifier {
 
     final stopwatch = Stopwatch()..start();
     try {
-      debugPrint('AppState: Pinging active backend at ${api.baseUrl}/health ...');
-      final response = await http.get(Uri.parse('${api.baseUrl}/health'))
+      debugPrint(
+          'AppState: Pinging active backend at ${api.baseUrl}/health ...');
+      final response = await http
+          .get(Uri.parse('${api.baseUrl}/health'))
           .timeout(const Duration(seconds: 15)); // Strict 15s timeout
       stopwatch.stop();
       if (response.statusCode == 200) {
         isWarmingUp = false;
         isOffline = false;
         notifyListeners();
-        debugPrint('AppState: Backend connection verified. Processing offline mutations.');
+        debugPrint(
+            'AppState: Backend connection verified. Processing offline mutations.');
         await _processOfflineQueue();
       } else {
-        throw Exception('Server health check returned status code: ${response.statusCode}');
+        throw Exception(
+            'Server health check returned status code: ${response.statusCode}');
       }
     } catch (e) {
       stopwatch.stop();
-      debugPrint('AppState: Active backend connection failed after ${stopwatch.elapsedMilliseconds}ms. Error: $e');
+      debugPrint(
+          'AppState: Active backend connection failed after ${stopwatch.elapsedMilliseconds}ms. Error: $e');
       _backgroundWarmup();
     }
   }
@@ -283,9 +300,12 @@ class AppState extends ChangeNotifier {
     int attempts = 0;
     while (attempts < 10 && isWarmingUp) {
       try {
-        debugPrint('AppState: Background warmup attempt ${attempts + 1}/10 at ${api.baseUrl}...');
-        final response = await http.get(Uri.parse('${api.baseUrl}/health'))
-            .timeout(const Duration(seconds: 15)); // Keep 15s timeout for warmup checks
+        debugPrint(
+            'AppState: Background warmup attempt ${attempts + 1}/10 at ${api.baseUrl}...');
+        final response = await http
+            .get(Uri.parse('${api.baseUrl}/health'))
+            .timeout(const Duration(
+                seconds: 15)); // Keep 15s timeout for warmup checks
         if (response.statusCode == 200) {
           isWarmingUp = false;
           isOffline = false;
@@ -300,7 +320,7 @@ class AppState extends ChangeNotifier {
         await Future.delayed(const Duration(seconds: 5));
       }
     }
-    
+
     if (isWarmingUp) {
       isWarmingUp = false;
       isOffline = true;
@@ -310,7 +330,8 @@ class AppState extends ChangeNotifier {
 
   // ── Offline Mutations Queue ────────────────────────────────────────────────
 
-  Future<void> _addToOfflineQueue(String action, Map<String, dynamic> data) async {
+  Future<void> _addToOfflineQueue(
+      String action, Map<String, dynamic> data) async {
     _offlineMutationQueue.add({
       'action': action,
       'data': data,
@@ -323,19 +344,19 @@ class AppState extends ChangeNotifier {
 
   Future<void> _processOfflineQueue() async {
     if (_offlineMutationQueue.isEmpty) return;
-    
+
     isReconnecting = true;
     notifyListeners();
-    
+
     final queueCopy = List<Map<String, dynamic>>.from(_offlineMutationQueue);
     _offlineMutationQueue.clear();
     await _saveLocalCache();
-    
+
     try {
       for (final item in queueCopy) {
         final action = item['action'];
         final data = item['data'];
-        
+
         if (action == 'create') {
           await api.createTask(TaskDraft(
             title: data['title'],
@@ -346,14 +367,16 @@ class AppState extends ChangeNotifier {
             description: data['description'] ?? '',
           ));
         } else if (action == 'update') {
-          await api.updateTask(data['id'], TaskDraft(
-            title: data['title'],
-            dueIso: data['due_iso'],
-            priority: data['priority'],
-            category: data['category'],
-            sound: data['sound'] ?? 'Default',
-            description: data['description'] ?? '',
-          ));
+          await api.updateTask(
+              data['id'],
+              TaskDraft(
+                title: data['title'],
+                dueIso: data['due_iso'],
+                priority: data['priority'],
+                category: data['category'],
+                sound: data['sound'] ?? 'Default',
+                description: data['description'] ?? '',
+              ));
         } else if (action == 'complete') {
           await api.completeTask(data['id']);
         } else if (action == 'reopen') {
@@ -369,7 +392,8 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       await _reloadData();
     } catch (e) {
-      debugPrint('AppState: Failed to process offline queue, returning items to queue: $e');
+      debugPrint(
+          'AppState: Failed to process offline queue, returning items to queue: $e');
       _offlineMutationQueue.insertAll(0, queueCopy);
       await _saveLocalCache();
       isReconnecting = false;
@@ -513,7 +537,7 @@ class AppState extends ChangeNotifier {
         debugPrint('AppState: Audit logs fetch failed: $e');
         auditLogs = [];
       }
-      
+
       await _saveLocalCache();
     } catch (e) {
       debugPrint('AppState: Network sync failed. Serving cached data: $e');
@@ -560,7 +584,9 @@ class AppState extends ChangeNotifier {
       weeklyCounts: [],
       weeklyRange: '',
       audit: {},
-      aiInsight: isOffline ? 'Offline Mode active. Syncing later.' : 'Syncing with backend...',
+      aiInsight: isOffline
+          ? 'Offline Mode active. Syncing later.'
+          : 'Syncing with backend...',
     );
   }
 
@@ -583,7 +609,7 @@ class AppState extends ChangeNotifier {
         tasks.insert(0, tempTask);
         tasks = _sortTasks(tasks);
         await _saveLocalCache();
-        
+
         await _addToOfflineQueue('create', {
           'title': draft.title,
           'due_iso': draft.dueIso,
@@ -688,7 +714,8 @@ class AppState extends ChangeNotifier {
           tasks = _sortTasks(tasks);
           await _saveLocalCache();
         }
-        await _addToOfflineQueue(isComp ? 'reopen' : 'complete', {'id': task.id});
+        await _addToOfflineQueue(
+            isComp ? 'reopen' : 'complete', {'id': task.id});
       } else {
         if (task.isCompleted) {
           await api.reopenTask(task.id);

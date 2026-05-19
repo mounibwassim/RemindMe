@@ -714,7 +714,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                controller.text = 'https://api-remindme.onrender.com';
+                controller.text = 'https://remindme-backend-k9mb.onrender.com';
               },
               child: const Text('Default Render'),
             ),

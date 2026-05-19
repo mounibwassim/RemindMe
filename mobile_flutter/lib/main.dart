@@ -24,7 +24,7 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
     if (session != null) {
       final api = ApiClient(
         baseUrl: const String.fromEnvironment('API_URL',
-            defaultValue: 'https://api-remindme.onrender.com'),
+            defaultValue: 'https://remindme-backend-k9mb.onrender.com'),
       );
       api.setSession(session);
 

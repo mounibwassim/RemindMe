@@ -519,7 +519,7 @@ class _LoginScreenState extends State<LoginScreen>
           actions: [
             TextButton(
               onPressed: () {
-                controller.text = 'https://api-remindme.onrender.com';
+                controller.text = 'https://remindme-backend-k9mb.onrender.com';
               },
               child: const Text('Default Render'),
             ),
@@ -1141,7 +1141,7 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
           actions: [
             TextButton(
               onPressed: () {
-                controller.text = 'https://api-remindme.onrender.com';
+                controller.text = 'https://remindme-backend-k9mb.onrender.com';
               },
               child: const Text('Default Render'),
             ),

@@ -21,11 +21,11 @@ class ApiClient {
     
     // Auto-detect environment base URL
     const explicitUrl = String.fromEnvironment('API_URL');
-    String detectedUrl = 'https://api-remindme.onrender.com';
+    String detectedUrl = 'https://remindme-backend-k9mb.onrender.com';
     if (explicitUrl.isNotEmpty) {
       detectedUrl = explicitUrl;
     } else if (kReleaseMode) {
-      detectedUrl = 'https://api-remindme.onrender.com';
+      detectedUrl = 'https://remindme-backend-k9mb.onrender.com';
     } else if (kIsWeb) {
       detectedUrl = 'http://localhost:8000';
     } else {
