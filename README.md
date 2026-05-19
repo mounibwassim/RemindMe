@@ -1,114 +1,178 @@
-# RemindMe
+# RemindMe 📋🤖
 
-A personal AI-powered task reminder app.
+[![Flutter](https://img.shields.io/badge/Flutter-3.41.9%20stable-02569B?logo=flutter&logoColor=white)](https://flutter.dev)
+[![FastAPI](https://img.shields.io/badge/FastAPI-v0.110.0-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
+[![Supabase](https://img.shields.io/badge/Supabase-Database%20%26%20RLS-3ECF8E?logo=supabase&logoColor=white)](https://supabase.com)
+[![Firebase](https://img.shields.io/badge/Firebase-Auth%20%26%20RTDB-FFCA28?logo=firebase&logoColor=black)](https://firebase.google.com)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org)
+[![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20Web-blue)](#)
 
-**Stack:**
-- 🎯 **Frontend**: Flutter (Chrome / Windows desktop)
-- 🐍 **Backend**: Python 3.10 + FastAPI (fully offline, no cloud dependencies)
-- 🔐 **Storage**: Encrypted local SQLite per user (AES via PyCryptodome)
+A production-grade, highly resilient **AI-Powered Task Reminder Application** migrating legacy Kivy interfaces into a modern cross-platform **Flutter** client and high-performance **FastAPI** backend with cloud database synchronization, user isolation, and robust offline-first capabilities.
 
 ---
 
-## Project Structure
+## 🌟 Key Features
 
-```
+### 1. 🤖 AI-Powered Hybrid Task Assistant
+* **Natural Language Parsing**: Schedule reminders naturally. E.g., *"gym tomorrow at 8 am with high priority"* or *"cancel the study session next Monday"*.
+* **Local-First NLP Parser**: Fast, offline regex-based parsing matches common day/time formats instantly without sending data to external APIs.
+* **Gemini 1.5 Flash Fallback**: For complex requests, the system calls the Google Gemini API to extract high-accuracy dates, times, and scheduling intent.
+* **Smart Auto-Categorization**: Automatically categorizes tasks based on text keywords into **11 categories**: *Gym, Study, Work, Health, Finance, Call, Family, Social, Home, Gaming, or Birthday*.
+* **Safety Checks**: Rejects past-dated task creation and guides the user to schedule future-aware tasks.
+* **Weekly & Monthly Insights**: Generates motivational productivity insights based on task completion trends via Gemini.
+
+### 2. ⚡ Resilient Offline-First Architecture
+* **Offline Mutation Queue**: Perform edits, creations, completions, snoozing, and deletions completely offline. Mutations are queued locally via `SharedPreferences` and automatically replayed to the cloud when the network restores.
+* **Active Environment Self-Healing**: Automatically probes and determines the correct API URL (Android Emulator local host, web local server, or production Render server). Clears defunct cached/invalid custom URLs.
+* **Warm-up Sequencer**: Handles Render Free Tier cold starts by providing a visual progress indicator and background retrying loops until the backend is fully awake.
+
+### 3. 🔒 Robust Security & User Isolation
+* **Supabase Security Policies (RLS)**: Enforces Row-Level Security on Supabase tables so users can only access their own tasks, audit logs, and analytics.
+* **Local Session Encryption (Optional)**: Support for encrypted local sessions using AES-256-GCM encryption and PBKDF2-HMAC-SHA256 key derivation.
+* **OTP Password Reset Fallback**: Features an OTP-based password recovery engine tied to SMTP (Gmail) fallback, replacing traditional links with secure code entry inputs.
+
+### 4. 📊 Analytics & Audit Logging
+* **Interactive Dashboard**: View task statistics, upcoming vs. overdue metrics, and visual week-by-week completion charts.
+* **Real-time Sync**: A centralized state synchronization (`syncAll()`) pushes task changes immediately to dashboard widgets, analytics counters, and audit logs.
+* **Automated Audit Logging**: Every mutation (create, edit, complete, delete, snooze) is fully logged to Supabase to build an unalterable history trail.
+* **Missed Task Detection**: Scans for pending tasks whose due times have passed and transitions them to a "missed" status automatically.
+
+### 5. 🎨 Customization & Premium UX
+* **Emoji-based Avatar Picker**: Replace plain text placeholders with modern emoji/character avatars (Boy, Business, Cyberpunk, Gaming, Robot, etc.).
+* **Material 3 Design**: Fully responsive screens, including Login, Home, Tasks, Calendar, Dashboard, History, Audit Logs, AI Assistant, and Settings.
+* **Custom Calendar Picker**: Interactive custom MDDialog calendar/time pickers customized for mobile screen framing (supports AM/PM and year-month selector).
+* **Multi-Theme Support**: Instant switching between Light Mode, Dark Mode, and System Default.
+
+---
+
+## 📂 Project Structure
+
+```text
 RemindMe/
-├── mobile_flutter/        # Flutter frontend (Material 3, Provider)
+├── mobile_flutter/          # Flutter Frontend (Material 3, Provider)
 │   ├── lib/
-│   │   ├── main.dart
-│   │   ├── app.dart
-│   │   ├── core/          # AppState, ApiClient
-│   │   ├── models/        # Task, Session, Analytics, AssistantReply
-│   │   └── screens/       # Login, Home, Tasks, Dashboard, Assistant, Settings
-│   └── pubspec.yaml
-├── backend_api/           # FastAPI Python server
+│   │   ├── main.dart        # Flutter entry point
+│   │   ├── app.dart         # Main App routing & theme config
+│   │   ├── core/            # AppState, ApiClient, NotificationService, WebNotifier
+│   │   ├── models/          # TaskItem, AnalyticsSummary, AuditLog, Session, AssistantReply
+│   │   └── screens/         # Login, Home, Tasks, Dashboard, Calendar, History, Settings, Assistant, Audit, Warmup
+│   ├── assets/              # Logos, custom avatar assets
+│   ├── pubspec.yaml         # Dependencies (shared_preferences, http, provider, etc.)
+│   └── web/                 # Web assets and manifest configurations
+│
+├── backend_api/             # FastAPI Python Server
 │   ├── app/
-│   │   ├── main.py        # FastAPI entry point
-│   │   ├── schemas.py     # Pydantic models
-│   │   ├── routers/       # auth, tasks, assistant, analytics
-│   │   └── services/      # task_service, session_store, analytics_service, assistant_service
-│   ├── requirements.txt
-│   └── .env               # Local dev config (not committed)
-├── backend/               # Shared Python utilities
-│   ├── crypto.py          # AES encrypt/decrypt + key derivation
-│   ├── storage.py         # SQLite CRUD
-│   ├── ai_assistant.py    # Offline NLP task parser (no API keys needed)
-│   ├── stats_service.py
-│   └── audit.py
-├── run_backend.ps1        # ▶ Start the Python API
-└── run_flutter.ps1        # ▶ Start the Flutter app
+│   │   ├── main.py          # FastAPI application init and CORS middleware
+│   │   ├── schemas.py       # Pydantic schemas (TaskDraft, Auth, Analytics)
+│   │   ├── deps.py          # Dependency injection helpers
+│   │   ├── routers/         # Auth, Tasks, Assistant, Analytics, System endpoints
+│   │   └── services/        # TaskService, SessionStore, AnalyticsService, AssistantService, InsightsService
+│   ├── Dockerfile           # Docker image definition for production hosting
+│   ├── requirements.txt     # Python requirements (fastapi, supabase, pydantic, pycryptodome)
+│   └── .env                 # Environment secrets (Supabase API credentials, SMTP config)
+│
+├── backend/                 # Shared Core Python Library
+│   ├── supabase_service.py  # Supabase client execution (CRUD for tasks, logs, analytics)
+│   ├── supabase_auth.py     # Auth integrations and password reset fallback
+│   ├── ai_assistant.py      # Local + Gemini 1.5 Flash parser logic
+│   ├── email_service.py     # SMTP Gmail client for OTP dispatch
+│   ├── otp_store.py         # In-memory storage for auth verification codes
+│   ├── crypto.py            # Local AES encryption utilities
+│   └── scheduler.py         # Automated background alert monitors
+│
+├── run_backend.ps1          # ▶ script to activate venv and spin up FastAPI server
+├── run_flutter.ps1          # ▶ script to spin up the Flutter UI client
+├── reset_db.ps1             # ▶ utility to purge and format local debug databases
+└── render.yaml              # Blueprint file to instantly spin up deployment on Render
 ```
 
 ---
 
-## Running Locally
+## 🛠️ Running Locally
 
 ### Prerequisites
-- Python 3.10+
-- Flutter 3.41.9 stable (at `C:\flutter_windows_3.41.9-stable\flutter`)
+* **Flutter SDK**: 3.41.9 stable or newer
+* **Python**: 3.10 or newer
+* **Git** installed on your system
 
-### 1. Start the Python Backend
+### 1. Backend Environment Setup
+Navigate to the `backend_api` directory and create an `.env` file (referencing any variables needed for database/auth connection):
+
+```ini
+SUPABASE_URL=https://your-supabase-project.supabase.co
+SUPABASE_KEY=your-supabase-service-role-key
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-gmail-app-password
+```
+
+### 2. Launching the Backend Server
+Run the PowerShell helper script in the root directory:
 
 ```powershell
 .\run_backend.ps1
 ```
 
-API runs at **http://127.0.0.1:8000**  
-Interactive docs: **http://127.0.0.1:8000/docs**
+This will automatically create a Python virtual environment (`.venv`), install all requirements, and spin up the FastAPI service on:
+* **API Address**: `http://127.0.0.1:8000`
+* **Swagger Documentation**: `http://127.0.0.1:8000/docs`
 
-> First time only — the venv is auto-detected. If missing, run:
-> ```powershell
-> cd backend_api
-> python -m venv .venv
-> .\.venv\Scripts\pip install -r requirements.txt
-> ```
-
-### 2. Start the Flutter App
-
-Open a **second terminal** and run:
+### 3. Launching the Flutter Client
+Open a new terminal session and run the Flutter launch script:
 
 ```powershell
-# Chrome (default)
+# To run on Web (Chrome - Default)
 .\run_flutter.ps1
 
-# Windows desktop
+# To run on Windows native desktop
 .\run_flutter.ps1 -Target windows
 ```
 
-App opens at **http://localhost:3000** (Chrome) or as a native window.
-
-### 3. Log In
-
-Use any credentials you like — the app creates an encrypted local database per user.
-
-| Field | Default |
-|-------|---------|
-| Python API URL | `http://127.0.0.1:8000` |
-| Username | *(your choice)* |
-| Email | *(your choice)* |
-| Local encryption secret | *(your choice — remember it!)* |
+The Flutter app will open in your browser (usually `http://localhost:3000`) or as a native Windows desktop client.
 
 ---
 
-## API Endpoints
+## 🐳 Production Deployment
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/health` | Health check |
-| POST | `/api/v1/auth/dev-login` | Start encrypted local session |
-| GET | `/api/v1/tasks` | List tasks |
-| POST | `/api/v1/tasks` | Create task |
-| PUT | `/api/v1/tasks/{id}` | Update task |
-| POST | `/api/v1/tasks/{id}/complete` | Mark complete |
-| POST | `/api/v1/tasks/{id}/snooze` | Snooze task |
-| DELETE | `/api/v1/tasks/{id}` | Delete task |
-| POST | `/api/v1/assistant/message` | Chat with offline AI assistant |
-| GET | `/api/v1/analytics/summary` | Dashboard analytics |
+### Docker Deployment
+The backend includes a fully optimized `Dockerfile` in `backend_api/` for containerized environments. To build and run the API server container locally:
+
+```bash
+# Build the Docker image from root workspace
+docker build -f backend_api/Dockerfile -t remindme-backend .
+
+# Run the container
+docker run -p 8000:8000 --env-file backend_api/.env remindme-backend
+```
+
+### Render Deployment
+This repository is configured for instant hosting on Render using the `render.yaml` blueprint. Adding this repository to Render will automatically spin up:
+1. A **Web Service** container built from `backend_api/Dockerfile`.
+2. Necessary configuration mappings to link environment variables.
 
 ---
 
-## Notes
+## 🧪 API Endpoints Reference
 
-- No external API keys required — the AI assistant is fully offline.
-- All task data is AES-encrypted locally; nothing is sent to any cloud.
-- The Flutter app uses hot-reload: press `r` in the Flutter terminal to reload after code changes.
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| **GET** | `/health` | Server status checks and network testing |
+| **POST** | `/api/v1/auth/register` | Create a new user account (Firebase + Supabase) |
+| **POST** | `/api/v1/auth/login` | Authenticate user and initiate session |
+| **POST** | `/api/v1/auth/dev-login` | Start local encrypted SQLite developer session |
+| **POST** | `/api/v1/auth/forgot-password` | Request password reset verification code (OTP) |
+| **POST** | `/api/v1/auth/confirm-password` | Submit password reset OTP verification code |
+| **GET** | `/api/v1/tasks` | Retrieve user-isolated tasks list |
+| **POST** | `/api/v1/tasks` | Create new task item |
+| **PUT** | `/api/v1/tasks/{id}` | Modify task item parameters |
+| **DELETE** | `/api/v1/tasks/{id}` | Purge task item |
+| **POST** | `/api/v1/tasks/{id}/complete` | Mark task as completed |
+| **POST** | `/api/v1/tasks/{id}/snooze` | Postpone task due time by a minute count |
+| **POST** | `/api/v1/assistant/message` | Send message to AI task assistant |
+| **GET** | `/api/v1/analytics/summary` | Retrieve dashboard stats & completion trend |
+
+---
+
+## 📄 License
+This project is licensed under the MIT License - see the LICENSE file for details.
