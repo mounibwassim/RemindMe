@@ -1,0 +1,14 @@
+{
+    "python.analysis.exclude": [
+        "**/_pyrefly_virtual__/**",
+        "**/.buildozer/**"
+    ],
+    "files.exclude": {
+        "**/_pyrefly_virtual__/**": true,
+        "**/.buildozer/**": true
+    },
+    "python.analysis.ignore": [
+        "**/_pyrefly_virtual__/**",
+        "**/.buildozer/**"
+    ]
+}

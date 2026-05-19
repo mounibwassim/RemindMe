@@ -1,143 +1,114 @@
-# RemindMe - Intelligent & Secure Mobile Task Manager
+# RemindMe
 
-**RemindMe** is a feature-rich, cross-platform mobile application designed to organize personal tasks with a focus on data privacy and local intelligence. Built using Python and KivyMD, it leverages industry-standard encryption protocols and a local SQLite database to ensure data integrity without reliance on cloud services.
+A personal AI-powered task reminder app.
 
----
-
-## 🚀 Key Features
-
-### 🔐 No Server-Side Storage (Fully Local Encryption Model)
-- **Local-First Architecture**: All data resides solely on the user's device, eliminating external attack vectors.
-- **Industry-Standard Encryption**: Task details (titles, descriptions) are encrypted using **AES-256-GCM**.
-- **Secure Key Derivation**: User passwords are secured using **PBKDF2-HMAC-SHA256** with **200,000 iterations**, making brute-force attacks computationally expensive.
-
-### 🤖 AI-Powered Productivity
-- **Natural Language Processing**: Tasks can be created via voice or text prompts, parsed locally to extract dates and times.
-- **Privacy-Preserving Insights**: The **Audit Analytics** engine runs locally to analyze completion rates and snooze patterns, providing productivity metrics without sharing data.
-
-### 📱 Modern & Adaptive UI
-- **Dynamic Theming**: The interface programmatically adapts color schemes based on task priority levels.
-- **Accessibility**: Implements high-contrast text rendering algorithms to ensure readability against dynamic background colors.
-- **Cross-Platform Compatibility**: Supports Android (API Level 31 / Android 12) and Windows Desktop environments.
-
-### 📊 Analytics & Auditing
-- **Visual Dashboard**: Interactive Bar Charts visualize weekly productivity trends.
-- **Audit Logging**: A local immutable log tracks all state changes (Creation, Updates, Deletions) for self-auditing.
-- **Timezone Awareness**: All logged events are stored in UTC and dynamically converted to the user's local timezone (e.g., Asia/Kuala_Lumpur) for accurate reporting.
-
-### 🔔 Robust Notification System
-- **Background Service**: Uses Android's `AlarmManager` (via Plyer) to deliver exact-time notifications even when the application is inactive.
-- **Desktop Integration**: Supports native Windows Toast notifications for desktop users.
+**Stack:**
+- 🎯 **Frontend**: Flutter (Chrome / Windows desktop)
+- 🐍 **Backend**: Python 3.10 + FastAPI (fully offline, no cloud dependencies)
+- 🔐 **Storage**: Encrypted local SQLite per user (AES via PyCryptodome)
 
 ---
 
-## 🛠️ Technology Stack
+## Project Structure
 
-- **Core Language**: Python 3.10
-- **UI Framework**: Kivy & KivyMD (Material Design)
-- **Database**: SQLite (configured with Write-Ahead Logging and thread-safety mechanisms)
-- **Cryptography**: `cryptography` library (PBKDF2 + AES-GCM)
-- **Build Tool**: Buildozer (Targeting Android API 31)
-- **Asynchronous Processing**: formatting data loading off the main thread to prevent Application Not Responding (ANR) errors.
-
----
-
-## 📦 Installation & Usage
-
-### Option 1: Run from Source Code (Python Required)
-
-This is the most flexible way for contributors or Python users.
-
-#### Prerequisites
-- Python 3.10+ installed
-- `pip` package manager
-
-#### Installation
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/mounibwassim/RemindMe.git
-   ```
-2. Navigate to the project folder:
-   ```bash
-   cd RemindMe
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-#### Run
-```bash
-python main.py
+```
+RemindMe/
+├── mobile_flutter/        # Flutter frontend (Material 3, Provider)
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── app.dart
+│   │   ├── core/          # AppState, ApiClient
+│   │   ├── models/        # Task, Session, Analytics, AssistantReply
+│   │   └── screens/       # Login, Home, Tasks, Dashboard, Assistant, Settings
+│   └── pubspec.yaml
+├── backend_api/           # FastAPI Python server
+│   ├── app/
+│   │   ├── main.py        # FastAPI entry point
+│   │   ├── schemas.py     # Pydantic models
+│   │   ├── routers/       # auth, tasks, assistant, analytics
+│   │   └── services/      # task_service, session_store, analytics_service, assistant_service
+│   ├── requirements.txt
+│   └── .env               # Local dev config (not committed)
+├── backend/               # Shared Python utilities
+│   ├── crypto.py          # AES encrypt/decrypt + key derivation
+│   ├── storage.py         # SQLite CRUD
+│   ├── ai_assistant.py    # Offline NLP task parser (no API keys needed)
+│   ├── stats_service.py
+│   └── audit.py
+├── run_backend.ps1        # ▶ Start the Python API
+└── run_flutter.ps1        # ▶ Start the Flutter app
 ```
 
-*Notes:*
-- Windows users may need to run as Administrator for notifications.
-- The app icon/logo will appear correctly in the taskbar and notifications (Windows only).
+---
 
-## Target Users & Problem Solved
-RemindMe is a secure desktop task management application with AI-powered natural language task creation and encrypted local storage. It is explicitly designed for privacy-conscious users who want powerful scheduling algorithms without sending their personal productivity data to cloud third parties.
+## Running Locally
 
-## Demo Video
-Watch the application in action:
-[Demo Video Link]
-
-## Screenshots
-
-*(Place UI images in `assets/screenshots/`)*
-- Login screen
-- Dashboard
-- AI assistant
-- Task creation
-- Notification popup
-
-## How to Test (Windows)
-
-1. Go to **Releases**.
-2. Download `RemindMe.exe`.
-3. Run the application.
-4. Create an account via Firebase Auth.
-5. Use the internal **AI assistant** to instantly create a task:
-   - *Example: "Remind me to submit my report tomorrow at 5pm"*
-
-### Option 3: Building for Android (APK)
-
-This project uses **Buildozer** to package the application.
-
-**Prerequisites**:
-- Ubuntu 20.04+ / WSL2
-- Java JDK 17
+### Prerequisites
 - Python 3.10+
+- Flutter 3.41.9 stable (at `C:\flutter_windows_3.41.9-stable\flutter`)
 
-**Build Configuration**:
-- **Target API**: 31 (Android 12)
-- **Minimum API**: 21 (Android 5.0)
-- **Architecture**: ARM64-v8a
+### 1. Start the Python Backend
 
-**Build Command**:
-```bash
-buildozer android debug
+```powershell
+.\run_backend.ps1
 ```
 
+API runs at **http://127.0.0.1:8000**  
+Interactive docs: **http://127.0.0.1:8000/docs**
+
+> First time only — the venv is auto-detected. If missing, run:
+> ```powershell
+> cd backend_api
+> python -m venv .venv
+> .\.venv\Scripts\pip install -r requirements.txt
+> ```
+
+### 2. Start the Flutter App
+
+Open a **second terminal** and run:
+
+```powershell
+# Chrome (default)
+.\run_flutter.ps1
+
+# Windows desktop
+.\run_flutter.ps1 -Target windows
+```
+
+App opens at **http://localhost:3000** (Chrome) or as a native window.
+
+### 3. Log In
+
+Use any credentials you like — the app creates an encrypted local database per user.
+
+| Field | Default |
+|-------|---------|
+| Python API URL | `http://127.0.0.1:8000` |
+| Username | *(your choice)* |
+| Email | *(your choice)* |
+| Local encryption secret | *(your choice — remember it!)* |
+
 ---
 
-## 📖 User Guide
+## API Endpoints
 
-### Dashboard
-- **Create Task**: Tap the `+` Floating Action Button.
-- **Manage Tasks**: Tap any card to view details.
-- **Search**: Real-time filtering by task title.
-
-### Analytics
-- **Weekly Overview**: View completion rates.
-- **Audit Details**: Tap specific metrics to view detailed logs with local timestamps.
-
-### Settings
-- **Theme**: Toggle Light/Dark mode.
-- **Account**: Secure password management.
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check |
+| POST | `/api/v1/auth/dev-login` | Start encrypted local session |
+| GET | `/api/v1/tasks` | List tasks |
+| POST | `/api/v1/tasks` | Create task |
+| PUT | `/api/v1/tasks/{id}` | Update task |
+| POST | `/api/v1/tasks/{id}/complete` | Mark complete |
+| POST | `/api/v1/tasks/{id}/snooze` | Snooze task |
+| DELETE | `/api/v1/tasks/{id}` | Delete task |
+| POST | `/api/v1/assistant/message` | Chat with offline AI assistant |
+| GET | `/api/v1/analytics/summary` | Dashboard analytics |
 
 ---
 
-## 📄 License
+## Notes
 
-This project is licensed under the MIT License - free for educational and personal use.
+- No external API keys required — the AI assistant is fully offline.
+- All task data is AES-encrypted locally; nothing is sent to any cloud.
+- The Flutter app uses hot-reload: press `r` in the Flutter terminal to reload after code changes.

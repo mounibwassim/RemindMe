@@ -65,10 +65,12 @@ def copy_bundled_data(storage_path):
             # Do NOT overwrite if it already exists to prevent data wiping
             if not os.path.exists(dest_path):
                 try:
-                    shutil.copy2(file_path, dest_path)
+                    # Use shutil.copy instead of copy2 to avoid metadata permission errors on Android
+                    shutil.copy(file_path, dest_path)
                     copied_files += 1
                 except Exception as e:
                     logging.error(f"Failed to copy bundled asset {filename} to {dest_path}: {e}")
-                    raise RuntimeError(f"Failed to extract bundled database: {e}")
+                    # On some Android versions, even simple copy can fail if file exists or is read-only
+                    pass 
     if copied_files > 0:
         logging.info(f"Copied {copied_files} essential files to persistent storage.")

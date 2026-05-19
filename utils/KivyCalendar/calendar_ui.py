@@ -10,7 +10,7 @@
 # https://xxblx.bitbucket.org/
 ###########################################################
 from kivy.lang import Builder
-from kivy.uix.screenmanager import ScreenManager, Screen
+from kivy.uix.screenmanager import ScreenManager, Screen, NoTransition
 from kivy.uix.popup import Popup
 from kivy.uix.relativelayout import RelativeLayout
 from kivy.uix.gridlayout import GridLayout
@@ -146,7 +146,7 @@ class CalendarWidget(RelativeLayout):
 		self.add_widget(self.title_label)
 		
 		# ScreenManager
-		self.sm = MonthsManager()
+		self.sm = MonthsManager(transition=NoTransition())
 		self.add_widget(self.sm)
 		
 		self.create_month_scr(self.quarter[1], toogle_today=True) 
@@ -243,7 +243,7 @@ class CalendarWidget(RelativeLayout):
 			self.create_month_scr(self.quarter[0])
 			
 		self.sm.current = prev_scr_name
-		self.sm.transition.direction = "right"
+		
 		
 		self.get_quarter()
 		self.title = "%s - %s" % (self.month_names[self.active_date[1] - 1], 
@@ -268,7 +268,7 @@ class CalendarWidget(RelativeLayout):
 			self.create_month_scr(self.quarter[2])
 			
 		self.sm.current = next_scr_name
-		self.sm.transition.direction = "left"
+		
 		
 		self.get_quarter()
 		self.title = "%s - %s" % (self.month_names[self.active_date[1] - 1], 

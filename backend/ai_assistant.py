@@ -1,597 +1,479 @@
+import requests
+import json
 import re
 from datetime import datetime, timedelta
 
-def correct_typos(text: str) -> str:
-    """
-    Correct common date/time typos using simple replacement.
-    """
-    corrections = {
-        r"\btmr\b": "tomorrow",
-        r"\btmrw\b": "tomorrow",
-        r"\btommm?orr?ow\b": "tomorrow", 
-        r"\byest\b": "yesterday",
-        r"\byest[ae]rday\b": "yesterday", 
-        r"\bmin(?:ute)?s?\b": "minutes",
-        r"\bhrs?\b": "hours",
-        # Month Typos
-        r"\bjanu(?:are?|ary?)\b": "january",
-        r"\bfub?ru(?:ar?|ary?)\b": "february",
-        r"\bmarsh{1,2}\b": "march",
-        r"\bqpril\b": "april",
-        r"\bmai\b": "may",
-        r"\bjune?\b": "june",
-        r"\bjuli?\b": "july",
-        r"\baug(?:ust)?\b": "august",
-        r"\bsep(?:t?ember)?\b": "september",
-        r"\boct(?:ober)?\b": "october",
-        r"\bnov(?:ember)?\b": "november",
-        r"\bdec(?:ember)?\b": "december",
-    }
-    
-    for pattern, replacement in corrections.items():
-        text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
-    return text
+# --- GLOBALS ---
+GEMINI_API_KEY = "AIzaSyBtoR3GqjwcRRXv68Ij9LnB8BETbPEvBco"
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
 
-def is_task_related(text: str) -> bool:
-    """
-    Returns False ONLY for confirmed non-task input:
-      - Mathematical expressions
-      - General knowledge questions
-      - Explicit philosophy/science queries
-    Everything else (including location names, activities, short phrases) returns True.
-    """
-    text_lower = text.lower().strip()
+# Use a highly specific, clean help message
+OFF_TRACK_MSG = 'I\'m your RemindMe Assistant! 📋\nTell me a task to schedule — try something like:\n• "study tomorrow at 6 pm"\n• "gym on Friday at 8 am"\n• "meeting next Monday at 10 am"'
 
-    # Block math expressions: "2+2", "5*3=", "calculate 10/2"
-    if re.search(r'\b\d+\s*[\+\-\*\/]\s*\d+', text_lower):
-        return False
+current_task = {"title": "", "date": "", "time": "", "priority": "Medium", "category": "General"}
 
-    # Block explicit general knowledge starts that are clearly off-topic
-    blocked_starts = [
-        "what is the capital",
-        "explain ", "who invented", "who is ", "who was ",
-        "tell me about ", "solve ", "how does gravity",
-        "what causes ", "define ", "history of ",
-        "calculate ", "compute "
-    ]
-    for b in blocked_starts:
-        if text_lower.startswith(b):
-            return False
+GREETINGS_PATTERN = r'^(hi|hello|hey|good morning|good afternoon|good evening|how are you|whats up|what\'s up|sup|greetings)(\s+there|\s+man|\s+bro|\s+assistant|\s+remindme|\s+ai|\s+robot)?\s*[!?.]*$'
 
-    # Block sentences that are clearly not tasks (feelings, opinions)
-    non_task_patterns = [
-        r"^i am (bored|sad|happy|tired|okay|fine|good)\b",
-        r"^it is (raining|sunny|hot|cold)\b",
-        r"^the weather\b",
-    ]
-    for p in non_task_patterns:
-        if re.search(p, text_lower):
-            return False
+# ─────────────────────────────────────────────
+# CATEGORY MAP
+# ─────────────────────────────────────────────
+CATEGORY_KEYWORDS = {
+    "Gym":      ["gym", "workout", "fitness", "cardio", "training", "exercise", "lifting", "weight", "calisthenics", "protein", "bodybuilding", "yoga", "pilates", "crossfit", "hiit", "sport", "run", "jogging", "swimming", "boxing", "martial arts"],
+    "Study":    ["homework", "exam", "revision", "assignment", "university", "college", "school", "class", "study", "learn", "read", "book", "lecture", "tutorial", "quiz", "test", "library", "textbook"],
+    "Work":     ["office", "project", "deadline", "client", "meeting", "report", "presentation", "zoom", "teams", "slack", "sync", "standup", "interview", "email", "contract", "salary", "boss", "work", "job", "career", "manager"],
+    "Health":   ["medicine", "doctor", "sleep", "water", "therapy", "health", "dentist", "physio", "vitamin", "meditation", "stress", "mental", "wellness", "clinic", "hospital", "pharmacy", "pill", "diet", "appointment"],
+    "Finance":  ["payment", "budget", "salary", "bank", "invoice", "finance", "pay", "money", "bill", "rent", "tax", "spend", "expense", "wallet", "crypto", "stock", "invest", "save", "income", "debt"],
+    "Call":     ["call", "phone", "dial", "contact", "talk", "mobile", "facetime", "whatsapp", "skype", "voice", "conference"],
+    "Family":   ["mom", "dad", "sister", "brother", "parents", "kids", "children", "son", "daughter", "aunt", "uncle", "cousin", "relative", "family", "wife", "husband"],
+    "Social":   ["party", "club", "bar", "event", "concert", "movie", "theater", "show", "gathering", "celebrate", "wedding", "friend", "date", "dinner", "lunch", "coffee", "hangout", "meetup"],
+    "Home":     ["clean", "cook", "laundry", "repair", "fix", "garden", "pet", "dog", "cat", "kitchen", "dishes", "vacuum", "mop", "groceries", "market", "house", "furniture"],
+    "Gaming":   ["game", "ranked", "steam", "playstation", "ps4", "ps5", "xbox", "nintendo", "pc", "gaming", "discord", "stream", "match", "quest", "level", "boss", "multiplayer", "online", "coop", "raid", "tournament"],
+    "Birthday": ["birthday", "cake", "party", "celebration", "gift", "anniversary", "surprise", "present", "born"],
+}
 
-    # Everything else is potentially a task
-    return True
+TASK_KEYWORDS = [
+    kw for kws in CATEGORY_KEYWORDS.values() for kw in kws
+] + ["remind", "task", "schedule", "session", "event", "plan", "do", "go to", "go", "visit", "pick up", "drop", "take", "call", "meet", "buy", "start", "finish", "complete"]
 
+TIME_INDICATORS = [
+    "today", "tomorrow", "tonight", "at", "pm", "am", "next", "this",
+    "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+    "evening", "morning", "afternoon", "noon", "midnight", "night",
+    "in ", "minutes", "hours", "week", "tonight", "asap", "soon"
+]
 
-def detect_intent(text: str) -> str:
-    """
-    Detects if input is:
-      GREETING   - hi, hello, hey, good morning/evening
-      SMALL_TALK - how are you, what's up
-      UNRELATED  - math, general knowledge questions
-      TASK       - anything else (location, action, activity, single word)
-    """
-    text = text.strip()
-    text_lower = text.lower()
+CONFIRM_WORDS = {"yes", "save", "sure", "ok", "confirm", "do it", "create", "y", "absolutely", "yep", "yeah", "yup"}
+CANCEL_WORDS  = {"cancel", "stop", "forget it", "restart", "clear", "nevermind", "reset", "no"}
 
-    # 1. Greetings
-    greeting_patterns = [
-        r"^(hi|hello|hey|assalamualaikum|salam)\b",
-        r"^good\s+(morning|evening|afternoon|night)\b",
-    ]
-    for pat in greeting_patterns:
-        if re.search(pat, text_lower):
-            return "GREETING"
-
-    # 2. Small talk
-    small_talk_patterns = [
-        r"^how are you",
-        r"^how('?re| are) (you|u)\b",
-        r"^what'?s up\b",
-        r"^how('?s| is) it going\b",
-    ]
-    for pat in small_talk_patterns:
-        if re.search(pat, text_lower):
-            return "SMALL_TALK"
-
-    # 3. Only reject confirmed non-task input
-    if not is_task_related(text):
-        return "UNRELATED"
-
-    # 4. Question mark at end + question word = likely general question, not a task
-    question_starts = ["what is ", "what are ", "who is ", "who are ",
-                       "explain ", "why is ", "why does ", "where is ",
-                       "how do ", "how does ", "how many ", "how much "]
-    if text_lower.endswith("?") and any(text_lower.startswith(q) for q in question_starts):
-        return "UNRELATED"
-
-    # 5. Everything else is a TASK (short phrase, location, activity, reminder)
-    return "TASK"
-
-
-def infer_category(text: str):
-    """
-    Infer category and icon from title text.
-    """
-    text_lower = text.lower()
-    category = "General"
-    icon = "star"
-    
-    keywords = {
-        "study": ("Study", "school"),
-        "school": ("Study", "school"),
-        "class": ("Study", "school"),
-        "exam": ("Study", "school"),
-        "assignment": ("Study", "school"),
-        "book": ("Study", "book-open-variant"),
-        "gym": ("Gym", "dumbbell"),
-        "sport": ("Gym", "dumbbell"),
-        "workout": ("Gym", "dumbbell"),
-        "run": ("Gym", "run"),
-        "buy": ("Shopping", "cart"),
-        "groceries": ("Shopping", "cart"),
-        "shop": ("Shopping", "cart"),
-        "mall": ("Shopping", "shopping"),
-        "market": ("Shopping", "cart"),
-        "store": ("Shopping", "cart"),
-        "meet": ("Work", "briefcase"),
-        "work": ("Work", "briefcase"),
-        "office": ("Work", "briefcase"),
-        "client": ("Work", "briefcase"),
-        "call": ("Work", "phone"),
-        "email": ("Work", "email"),
-        "doctor": ("Health", "heart-pulse"),
-        "hospital": ("Health", "heart-pulse"),
-        "med": ("Health", "pill"),
-        "health": ("Health", "heart"),
-        "flight": ("Travel", "airplane"),
-        "trip": ("Travel", "airplane"),
-        "travel": ("Travel", "airplane"),
-        "vacation": ("Travel", "airplane"),
-        "party": ("Personal", "party-popper"),
-        "friend": ("Personal", "account"),
-        "personal": ("Personal", "account"),
-        "family": ("Personal", "account"),
-        "home": ("Personal", "home"),
-    }
-    
-    for k, (cat, ico) in keywords.items():
-        if k in text_lower:
-            category = cat
-            icon = ico
-            break
-            
-    return category, icon
-
-def generate_description(title: str) -> str:
-    """
-    Deterministic description generator based on keywords.
-    """
-    title_lower = title.lower()
-    if "gym" in title_lower or "workout" in title_lower:
-        return "Remember to stay hydrated and track your sets."
-    if "study" in title_lower or "exam" in title_lower:
-        return "Focus time. Put your phone away and take short breaks."
-    if "meet" in title_lower or "call" in title_lower:
-        return "Check the agenda and bring necessary notes."
-    if "buy" in title_lower or "shop" in title_lower:
-        return "Check if you have any coupons or loyalty cards."
-    if "doctor" in title_lower or "med" in title_lower:
-        return "Bring any relevant medical history or prescriptions."
+# ─────────────────────────────────────────────
+# TIME NORMALIZATION
+# ─────────────────────────────────────────────
+def _normalize_time(time_str: str) -> str:
+    if not time_str:
+        return ""
+    s = time_str.strip().upper().replace(".", "")
+    for fmt in ["%H:%M", "%I:%M %p", "%I %p", "%H:%M:%S", "%I:%M:%S %p"]:
+        try:
+            return datetime.strptime(s, fmt).strftime("%H:%M")
+        except ValueError:
+            pass
+    m = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?', s)
+    if m:
+        try:
+            h, minute, ampm = int(m.group(1)), int(m.group(2) or 0), m.group(3)
+            if ampm == "PM" and h < 12:
+                h += 12
+            elif ampm == "AM" and h == 12:
+                h = 0
+            return f"{h:02d}:{minute:02d}"
+        except: pass
     return ""
 
-def clean_title_only(text: str) -> str:
-    """
-    Basic fallback cleaner.
-    """
-    text = correct_typos(text)
-    prefixes = [
-        r"i want to\s+", r"i need to\s+", r"remind me to\s+", r"remind me\s+", 
-        r"please\s+", r"can you\s+", r"add a task to\s+"
+# ─────────────────────────────────────────────
+# LOCAL PARSER — always runs first, no API needed
+# ─────────────────────────────────────────────
+WEEKDAY_MAP = {
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6
+}
+
+def _parse_date_local(text: str, now: datetime = None) -> str:
+    t = text.lower()
+    if now is None: now = datetime.now()
+
+    if "today" in t or "tonight" in t:
+        return now.strftime("%Y-%m-%d")
+    if "tomorrow" in t:
+        return (now + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    # Handle "next week/month/year"
+    if "next week" in t: return (now + timedelta(days=7)).strftime("%Y-%m-%d")
+    if "next month" in t:
+        m, y = (now.month % 12) + 1, now.year + (now.month // 12)
+        try: return datetime(y, m, now.day).strftime("%Y-%m-%d")
+        except: return datetime(y, m, 28).strftime("%Y-%m-%d")
+    if "next year" in t:
+        return datetime(now.year + 1, now.month, now.day).strftime("%Y-%m-%d")
+
+    # Handle "in X days/weeks"
+    m = re.search(r'in (\d+)\s+day', t)
+    if m: return (now + timedelta(days=int(m.group(1)))).strftime("%Y-%m-%d")
+    m = re.search(r'in (\d+)\s+week', t)
+    if m: return (now + timedelta(weeks=int(m.group(1)))).strftime("%Y-%m-%d")
+
+    # Handle DD/MM or DD/MM/YYYY or DD-MM-YYYY
+    m = re.search(r'\b(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?\b', t)
+    if m:
+        try:
+            d, mon = int(m.group(1)), int(m.group(2))
+            y = int(m.group(3)) if m.group(3) else now.year
+            if y < 100: y += 2000
+            return datetime(y, mon, d).strftime("%Y-%m-%d")
+        except: pass
+
+    # Month names: "23 may", "may 23", "23rd may", "23 of may", "june 23"
+    months = [
+        ("jan", 1), ("january", 1), ("feb", 2), ("february", 2),
+        ("mar", 3), ("march", 3), ("apr", 4), ("april", 4),
+        ("may", 5), ("jun", 6), ("june", 6), ("jul", 7), ("july", 7),
+        ("aug", 8), ("august", 8), ("sep", 9), ("september", 9),
+        ("oct", 10), ("october", 10), ("nov", 11), ("november", 11),
+        ("dec", 12), ("december", 12)
     ]
-    for p in prefixes:
-        text = re.sub(p, "", text, flags=re.IGNORECASE)
-    return re.sub(r'\s+', ' ', text).strip().capitalize()
+    # Sort by length descending to match longest first (e.g. "june" before "jun")
+    months.sort(key=lambda x: len(x[0]), reverse=True)
 
+    for m_name, m_idx in months:
+        if m_name in t:
+            # Check "23rd may", "23 may", "23 of may"
+            m2 = re.search(rf'(\d{{1,2}})(?:st|nd|rd|th)?(?:\s+of)?\s+{m_name}\b', t)
+            # Check "may 23", "may 23rd"
+            m3 = re.search(rf'\b{m_name}\s+(\d{{1,2}})(?:st|nd|rd|th)?', t)
+            day = int(m2.group(1) if m2 else (m3.group(1) if m3 else 0))
+            if day:
+                y = now.year
+                # Check for year "may 23 2026"
+                m4 = re.search(rf'{m_name}\s+{day}\s+(\d{{4}})', t)
+                if m4: y = int(m4.group(1))
+                try:
+                    res_date = datetime(y, m_idx, day)
+                    # If the date is in the past, maybe they mean next year?
+                    if res_date < now - timedelta(days=1):
+                        res_date = datetime(y + 1, m_idx, day)
+                    return res_date.strftime("%Y-%m-%d")
+                except: pass
 
-def parse_date_time_smart(text: str):
-    """
-    Robustly parses date and time from text using search_dates.
-    Returns: (dt_obj, has_time_bool, found_text_list)
-    """
-    try:
-        import dateparser
-        from dateparser.search import search_dates
-    except ImportError:
-        dateparser = None
-        search_dates = None
-
-    settings = {
-        'TIMEZONE': 'local',
-        'RETURN_AS_TIMEZONE_AWARE': False
-    }
-    
-    parse_text = correct_typos(text)
-    parse_text = re.sub(r'\bafter tomorrow\b', 'day after tomorrow', parse_text, flags=re.IGNORECASE)
-    parse_text = re.sub(r'(\d)(pm|am)', r'\1 \2', parse_text, flags=re.IGNORECASE)
-    
-    # 12 AM explicit mapping to 00:xx to prevent 12:xx PM defaults
-    parse_text = re.sub(r'\b12:(\d{2})\s*am\b', r'00:\1', parse_text, flags=re.IGNORECASE)
-    parse_text = re.sub(r'\b12\s*am\b', r'00:00', parse_text, flags=re.IGNORECASE)
-    
-    
-    if dateparser:
-        dt = dateparser.parse(parse_text, settings=settings)
-        found = search_dates(parse_text, settings=settings)
-    else:
-        dt = None
-        found = []
-    final_dt = dt
-    found_texts = []
-    
-    if found:
-        valid_found = []
-        stopwords = ["to", "me", "go", "a", "the", "for", "in", "on", "at", "of"]
-        for text_chunk, d in found:
-            if text_chunk.lower() not in stopwords:
-                 valid_found.append(d)
-                 found_texts.append(text_chunk)
-        
-        if valid_found and not final_dt:
-             final_dt = valid_found[-1]
-    
-    now = datetime.now()
-    if not final_dt:
-         return {"status": "incomplete", "missing": "date_or_time"}, False, found_texts
-
-    if final_dt < now:
-         if "yesterday" in text.lower():
-             return final_dt, False, found_texts
-             
-         has_digit = bool(re.search(r'\d', text))
-         date_keywords = [
-             "tomorrow", "day after", "next", "last", "coming",
-             "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-             "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
-         ]
-         date_mentioned = any(k in text.lower() for k in date_keywords)
-         
-         if date_mentioned:
-             if has_digit:
-                 try:
-                     next_year_dt = final_dt.replace(year=final_dt.year + 1)
-                     if next_year_dt > now:
-                         final_dt = next_year_dt
-                 except ValueError:
-                     pass
-             else:
-                 try:
-                     next_week_dt = final_dt + timedelta(days=7)
-                     if next_week_dt > now:
-                          final_dt = next_week_dt
-                 except:
-                     pass
-         else:
-             # Just time mentioned and it's in the past (e.g. "at 5pm" when it's 6pm)
-             # Push to tomorrow
-             final_dt = final_dt + timedelta(days=1)
-
-    has_time = bool(re.search(r'\d{1,2}:\d{2}', text) or re.search(r'\d{1,2}\s*(?:am|pm)', text, re.IGNORECASE))
-    
-    return final_dt, has_time, found_texts
-
-def validate_date(text: str):
-    dt, has_time, _ = parse_date_time_smart(text)
-    if not dt:
-        return None, False, "I couldn't understand that date. Please try 'Tomorrow', 'Monday', or 'Dec 25'."
-    now = datetime.now()
-    if dt.date() < now.date():
-         return None, False, "This is a past date. Please select a future date."
-    return dt, True, None
-
-def validate_time(text: str, date_ctx):
-    try:
-        import dateparser
-    except ImportError:
-        dateparser = None
-    if isinstance(date_ctx, float):
-        date_ctx = datetime.fromtimestamp(date_ctx)
-    parse_text = f"{date_ctx.strftime('%Y-%m-%d')} {text}"
-    dt = dateparser.parse(parse_text) if dateparser else None
-    if not dt:
-         return None, False, "Invalid time format. Try '5pm', '17:00', or '9:30 am'."
-    dt = dt.replace(year=date_ctx.year, month=date_ctx.month, day=date_ctx.day)
-    now = datetime.now()
-    if dt < now:
-        return None, False, "This is a past time. Please select a future time."
-    return dt.isoformat(), True, None
-
-def extract_task_details(text: str):
-    try:
-        import dateparser
-    except ImportError:
-        dateparser = None
-    clean_title = correct_typos(text)
-    
-    # 0. Manual Check for "Next/This/Last Weekday"
-    # Added abbreviations
-    weekdays_map = {
-        "monday": 0, "mon": 0, 
-        "tuesday": 1, "tue": 1, "tues": 1, 
-        "wednesday": 2, "wed": 2, 
-        "thursday": 3, "thu": 3, "thur": 3, "thurs": 3,
-        "friday": 4, "fri": 4, 
-        "saturday": 5, "sat": 5, 
-        "sunday": 6, "sun": 6
-    }
-    
-    # Pattern matches "Next Fri", "This Mon", etc.
-    wd_pattern = r'\b(next|this|last|coming)\s+(' + '|'.join(weekdays_map.keys()) + r')\b'
-    
-    manual_dt = None
-    manual_found_text = ""
-    prefix = ""
-    
-    match = re.search(wd_pattern, text, re.IGNORECASE)
-    if match:
-         prefix = match.group(1).lower()
-         day_name = match.group(2).lower()
-         manual_found_text = match.group(0)
-         
-         if prefix in ["next", "this", "coming"]:
-             target_idx = weekdays_map[day_name]
-             now_dt = datetime.now()
-             current_idx = now_dt.weekday()
-             
-             days_ahead = (target_idx - current_idx) % 7
-             if days_ahead == 0:
-                 days_ahead = 7
-                 
-             manual_dt = now_dt + timedelta(days=days_ahead)
-
-    # NEW: Check for Explicit "Day Month" (e.g. 4 Jan) if Next Weekday didn't fire
-    if not manual_dt:
-        months_regex = r"(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*"
-        # 1. "4 January" or "4th Jan"
-        dm_pattern = r'\b(\d{1,2}(?:st|nd|rd|th)?)\s*(?:of)?\s*' + months_regex + r'\b'
-        # 2. "January 4" or "Jan 4th"
-        md_pattern = r'\b' + months_regex + r'\s+(\d{1,2}(?:st|nd|rd|th)?)\b'
-        
-        match_dm = re.search(dm_pattern, text, re.IGNORECASE)
-        match_md = re.search(md_pattern, text, re.IGNORECASE)
-        
-        explicit_date_str = ""
-        if match_dm:
-            explicit_date_str = match_dm.group(0)
-        elif match_md:
-            explicit_date_str = match_md.group(0)
-            
-        if explicit_date_str:
-             manual_found_text = explicit_date_str
-             # Using 'future' ensures "4 Jan" acts as "Upcoming 4 Jan"
-             manual_dt = dateparser.parse(explicit_date_str, settings={'TIMEZONE': 'local', 'PREFER_DATES_FROM': 'future'}) if dateparser else None
-             
-             # Fallback safety bump if 'future' setting failed to bump (rare but possible)
-             if manual_dt:
-                 now_chk = datetime.now()
-                 if manual_dt.date() < now_chk.date():
-                      try:
-                          manual_dt = manual_dt.replace(year=manual_dt.year + 1)
-                      except: pass
-    
-    # 1. Standard Parse (finds Time too)
-    standard_dt, has_time, found_texts = parse_date_time_smart(text)
-    
-    final_dt = standard_dt
-    
-    # 2. Merge Manual logic (Next Fri, etc.)
-    if manual_dt:
-        final_dt = manual_dt
-        # Merge time from standard_dt if available
-        if has_time and standard_dt and not isinstance(standard_dt, dict):
-            final_dt = final_dt.replace(hour=standard_dt.hour, minute=standard_dt.minute, second=0, microsecond=0)
-        else:
-            # Default to 00:00 if no time found
-            final_dt = final_dt.replace(hour=0, minute=0, second=0, microsecond=0)
-        found_texts.append(manual_found_text)
-
-    # 3. Explicit Time Extraction Override (Ensures 3 pm, 9 am are caught even if mixed)
-    if has_time:
-        # Match "9 am", "3pm", "15:00", "3:30 pm"
-        time_match = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)', text, re.IGNORECASE)
-        if not time_match:
-            # Fallback for "at 9" or "at 15"
-            time_match = re.search(r'\bat\s+(\d{1,2})(?::(\d{2}))?\b', text, re.IGNORECASE)
-            
-        if time_match:
-            try:
-                groups = time_match.groups()
-                h = int(groups[0])
-                m = int(groups[1]) if groups[1] else 0
-                p = groups[2].lower() if len(groups) > 2 and groups[2] else None
-                
-                if p == 'pm' and h < 12: h += 12
-                elif p == 'am' and h == 12: h = 0
-                elif not p and h < 7: # Heuristic: if no am/pm and small number like "at 3", assume PM
-                     h += 12
-                
-                if final_dt and not isinstance(final_dt, dict):
-                    final_dt = final_dt.replace(hour=h, minute=m, second=0, microsecond=0)
-                    
-                    # If the resulting time is in the past and no date was specifically mentioned, push to tomorrow
-                    now = datetime.now()
-                    if final_dt < now and not manual_dt:
-                        # Check if any date keyword was in the text
-                        date_keywords = ["tomorrow", "next", "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
-                        if not any(k in text.lower() for k in date_keywords):
-                            final_dt += timedelta(days=1)
-            except:
+    for day_name, day_num in WEEKDAY_MAP.items():
+        if day_name in t:
+            days_ahead = (day_num - now.weekday() + 7) % 7
+            if "next" in t:
+                if days_ahead == 0: days_ahead = 7
+            elif "this" in t:
+                # If it's "this monday" and today is monday, it's today (0)
                 pass
+            else:
+                # Default to nearest future day
+                if days_ahead == 0: days_ahead = 7
+            return (now + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
 
-    # 4. Clean Title
-    prefixes = [r"i want to\s+", r"i need to\s+", r"remind me to\s+", r"please\s+", r"create task\s+"]
-    for p in prefixes:
-        clean_title = re.sub(p, "", clean_title, flags=re.IGNORECASE)
+    return ""
+
+def _parse_time_local(text: str, now: datetime = None) -> str:
+    t = text.lower()
+    if now is None: now = datetime.now()
+    named = {"noon": "12:00", "midnight": "00:00", "morning": "08:00",
+             "afternoon": "14:00", "evening": "18:00", "tonight": "20:00", "night": "21:00"}
+    
+    # Handle "in X hours"
+    m = re.search(r'in (\d+)\s+hour', t)
+    if m:
+        future = now + timedelta(hours=int(m.group(1)))
+        return future.strftime("%H:%M")
+
+    # Handle "6 in the evening", "8 in the morning"
+    m = re.search(r'(\d{1,2})\s+in the\s+(morning|afternoon|evening|night)', t)
+    if m:
+        h = int(m.group(1))
+        period = m.group(2)
+        if period in ["afternoon", "evening", "night"] and h < 12: h += 12
+        if period == "morning" and h == 12: h = 0
+        return f"{h:02d}:00"
+
+    # Handle "0830", "1800"
+    m = re.search(r'\b(\d{2})(\d{2})\b', t)
+    if m and not t.startswith("20"): # Avoid matching year 2026
+        h, mn = int(m.group(1)), int(m.group(2))
+        if 0 <= h < 24 and 0 <= mn < 60:
+            return f"{h:02d}:{mn:02d}"
+
+    # Try more specific formats first: "at 5pm", "5:30", "5pm"
+    # 1. Look for HH:MM format
+    m = re.search(r'\b(\d{1,2}):(\d{2})(?:\s*(am|pm))?\b', t)
+    if m:
+        h = int(m.group(1))
+        minute = int(m.group(2))
+        ampm = (m.group(3) or "").lower()
+        if ampm == "pm" and h < 12: h += 12
+        elif ampm == "am" and h == 12: h = 0
+        return f"{h:02d}:{minute:02d}"
+
+    # 2. Look for "at X", "X pm", "X am"
+    m = re.search(r'(?:at\s+)?(\d{1,2})\s*(am|pm)\b', t)
+    if m:
+        h = int(m.group(1))
+        ampm = m.group(2).lower()
+        if ampm == "pm" and h < 12: h += 12
+        elif ampm == "am" and h == 12: h = 0
+        return f"{h:02d}:00"
+
+    # 3. Last resort: "at X" (without am/pm)
+    m = re.search(r'\bat\s+(\d{1,2})\b', t)
+    if m:
+        h = int(m.group(1))
+        if h < 8: h += 12 # Assume evening if small number like "at 5"
+        return f"{h:02d}:00"
+
+    for kw, val in named.items():
+        if kw in t: return val
+    return ""
+
+def _detect_category(text: str) -> str:
+    t = text.lower()
+    for cat in ["Family", "Call", "Social", "Finance", "Work", "Study", "Gym", "Home"]:
+        if any(kw in t for kw in CATEGORY_KEYWORDS.get(cat, [])):
+            return cat
+    return "General"
+
+def _detect_priority(text: str) -> str:
+    t = text.lower()
+    if any(w in t for w in ["urgent", "asap", "important", "critical", "high"]): return "High"
+    if any(w in t for w in ["low", "whenever", "not urgent", "someday"]): return "Low"
+    return "Medium"
+
+def _build_title(text: str) -> str:
+    t = text.strip()
+    # Strip dates like DD/MM/YYYY
+    t = re.sub(r'\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b', '', t)
+    # Strip times
+    t = re.sub(r'\bat\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\b\d{1,2}(?::\d{2})?\s*(?:am|pm)', '', t, flags=re.IGNORECASE)
+    # Strip keywords
+    for phrase in ["today", "tonight", "tomorrow", "this morning", "this evening", "this afternoon", "next week", "next month", "next year", "in \d+ days?", "in \d+ weeks?"] + list(WEEKDAY_MAP.keys()):
+        t = re.sub(rf'\b(next\s+)?{phrase}\b', '', t, flags=re.IGNORECASE)
+    # Strip month names and dates like "23rd may", "may 23"
+    months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
+              "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
+    for m in months:
+        t = re.sub(rf'\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?{m}\b', '', t, flags=re.IGNORECASE)
+        t = re.sub(rf'\b{m}\s+\d{{1,2}}(?:st|nd|rd|th)?\b', '', t, flags=re.IGNORECASE)
+
+    t = re.sub(r'^(remind me to|remind me|please|i need to|i want to|schedule|add|create|set)\s+', '', t, flags=re.IGNORECASE)
+    t = re.sub(r'\s+', ' ', t).strip(" ,.-")
+    return t.capitalize() if t else ""
+
+
+
+def _local_parse(text: str, now: datetime):
+    t_low = text.lower().strip()
+    
+    # Use word boundaries for task keywords
+    task_pattern = r'\b(' + '|'.join(re.escape(kw) for kw in TASK_KEYWORDS) + r')\b'
+    has_task = re.search(task_pattern, t_low) is not None
+    
+    # Time indicators - exclude 'am'/'pm' from simple string check as they are too common in chatter
+    simple_indicators = [ti for ti in TIME_INDICATORS if ti not in ["am", "pm"]]
+    time_pattern = r'\b(' + '|'.join(re.escape(ti) for ti in simple_indicators) + r')\b'
+    # Also check for specific time patterns like "8am", "8:00", "at 4"
+    has_time = re.search(time_pattern, t_low) or re.search(r'\d{1,2}(?::\d{2})?\s*(am|pm)?', t_low)
+
+    # Priority check
+    has_prio = any(w in t_low for w in ["high", "medium", "low", "urgent", "asap", "important"])
+
+    # If it's just "I am ..." or "How am ...", it's usually chatter
+    if not has_task and not has_time and not has_prio:
+        return None
         
-    if found_texts:
-        found_texts = list(set(found_texts))
-        found_texts.sort(key=len, reverse=True)
-        for s in found_texts:
-             if s:
-                 clean_title = re.sub(re.escape(s), "", clean_title, flags=re.IGNORECASE)
-                 
-    clean_title = re.sub(r'\b(next|on|at|in|by|from)\s*$', '', clean_title, flags=re.IGNORECASE)
-    clean_title = re.sub(r'\s+', ' ', clean_title).strip()
-    
-    if clean_title: 
-         clean_title = clean_title[0].upper() + clean_title[1:]
+    # Extra check: if it starts with "I am" and has no other task indicators, it's chatter
+    if t_low.startswith("i am ") and not has_task and not re.search(time_pattern, t_low):
+        return None
 
-    # Detect if date was EXPLICITLY mentioned
-    date_keywords = [
-        "tomorrow", "yesterday", "today", "day after", "next", "last", "this", "coming",
-        "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
-        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
-    ]
-    date_mentioned = any(k in text.lower() for k in date_keywords) or bool(re.search(r'\d{1,2}/\d{1,2}', text))
+    return {
+        "title":    _build_title(text),
+        "date":     _parse_date_local(text, now),
+        "time":     _parse_time_local(text, now),
+        "priority": _detect_priority(text),
+        "category": _detect_category(text),
+    }
+
+# ─────────────────────────────────────────────
+# GEMINI — optional enhancement
+# ─────────────────────────────────────────────
+def _call_gemini(prompt: str):
+    try:
+        # Debug logging
+        with open("gemini_debug.log", "a", encoding="utf-8") as f:
+            f.write(f"\n--- PROMPT ---\n{prompt}\n")
+            
+        headers = {'Content-Type': 'application/json'}
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 256}
+        }
+        r = requests.post(GEMINI_URL, headers=headers, json=payload, timeout=8)
+        if r.status_code == 200:
+            res = r.json()['candidates'][0]['content']['parts'][0]['text'].strip()
+            with open("gemini_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"--- RESPONSE ---\n{res}\n")
+            return res
+    except Exception as e:
+        with open("gemini_debug.log", "a", encoding="utf-8") as f:
+            f.write(f"--- ERROR ---\n{e}\n")
+        print(f"Gemini Error: {e}")
+    return None
+
+def _gemini_enhance(text: str, partial: dict, now: datetime):
+    now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+    now_day = now.strftime("%A")
+    prompt = f"""
+Current datetime: {now_str} ({now_day})
+User message: "{text}"
+Current partial task: {json.dumps(partial)}
+
+You are an expert scheduler. Extract the EXACT date and time from the user message.
+- Today is {now_day}, {now_str}.
+- If the user says "in 2 hours", calculate it based on {now_str}.
+- "homework on 23 may" -> date: 2026-05-23, time: 10:00 (default)
+- "6 in the evening" -> time: 18:00
+- "noon" -> time: 12:00
+- "midnight" -> time: 00:00
+- "23rd of may" -> date: 2026-05-23
+- Current year is {now.year}.
+
+Return ONLY a JSON object with 'date' (YYYY-MM-DD) and 'time' (HH:MM).
+If a field is already present in 'Current partial task', keep it unless the user message explicitly changes it.
+DO NOT ASK QUESTIONS. ONLY RETURN JSON.
+"""
+    res = _call_gemini(prompt)
+    if not res: return partial
+    m = re.search(r'\{.*?\}', res, re.DOTALL)
+    if m:
+        try:
+            data = json.loads(m.group())
+            if data.get("date") and not partial.get("date"):
+                partial["date"] = data["date"]
+            if data.get("time") and not partial.get("time"):
+                partial["time"] = _normalize_time(data["time"])
+        except: pass
+    return partial
+
+# ─────────────────────────────────────────────
+# MAIN HANDLER
+# ─────────────────────────────────────────────
+def handle_user_input(text: str, client_time: str = None, _history_ext=None, _draft_ext=None):
+    global current_task
     
-    if not final_dt or isinstance(final_dt, dict):
-        if has_time:
-             # Time found but no date -> Default to Today
-             final_dt = datetime.now()
-             t_dt = dateparser.parse(text, settings={'TIMEZONE': 'local'}) if dateparser else None
-             if t_dt:
-                 final_dt = final_dt.replace(hour=t_dt.hour, minute=t_dt.minute, second=0, microsecond=0)
-             else:
-                 return clean_title, {"status": "incomplete", "missing": "date_or_time"}, False, "missing_date"
-        else:
-             return clean_title, {"status": "incomplete", "missing": "date_or_time"}, False, "missing_date"
-    
-    # If time found but NO date mentioned -> Force Today
+    # Use client time if provided, otherwise server time
     now = datetime.now()
-    if has_time and not date_mentioned and not manual_dt:
-        final_dt = final_dt.replace(year=now.year, month=now.month, day=now.day)
+    if client_time:
+        try:
+            # Handle ISO8601 from dart (e.g. 2026-05-14T17:39:53.000)
+            if 'T' in client_time:
+                now = datetime.fromisoformat(client_time.split('.')[0])
+        except: pass
 
-    return clean_title, final_dt, has_time, None
+    task_draft = _draft_ext if isinstance(_draft_ext, dict) and "title" in _draft_ext else current_task.copy()
+    t = text.strip().lower()
 
-def generate_weekly_insight(db_path, start_dt, completed, created, snoozed, sent):
-    """Generates general, non-personal behavioral insights for the 7-day period."""
-    import sqlite3
-    from datetime import datetime
-    
-    conn = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
-    cur = conn.cursor()
-    
-    start_iso = start_dt.isoformat()
-    end_iso = datetime.now().isoformat()
-    
-    # We can still calculate stats to determine WHICH general advice to give,
-    # but the text returned must be public/general.
-    try:
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE due_iso >= ? AND due_iso < ? AND status != 'completed'", (start_iso, end_iso))
-        missed = cur.fetchone()[0]
-    except:
-        missed = 0
-        
-    try:
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE due_iso >= ? AND due_iso < ?", (start_iso, end_iso))
-        total_due = cur.fetchone()[0]
-    except:
-        total_due = missed + completed
-        
-    missed_rate = int((missed / total_due) * 100) if total_due > 0 else 0
-    completion_rate = int((completed / total_due) * 100) if total_due > 0 else 0
-    
-    try:
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE due_iso >= ? AND due_iso < ? AND priority = 1", (start_iso, end_iso))
-        high_prio = cur.fetchone()[0]
-    except:
-        high_prio = 0
-        
-    conn.close()
-    
-    high_prio_rate = (high_prio / total_due) * 100 if total_due > 0 else 0
-    
-    # 6 Scenarios specifically mapped to Advanced Weekly Metrics Requirements + Motivating Actions
-    if completed >= 3:
-        return "Excellent productivity! You’re crushing your weekly goals. Keep it up!"
-    elif completed == 2:
-        return "Nice work! You’re building momentum for the week."
-    elif completed == 1:
-        return "Good start! Keep organizing your week."
-    elif total_due == 0:
-        return "It's a fresh week! Start by planning your tasks for the days ahead."
-    elif missed > 0:
-        return "You have overdue tasks this week. Review scheduling accuracy and consider setting earlier reminders to improve responsiveness."
-    elif snoozed > 3:
-        return "Frequent snoozing detected. Consider adjusting task timing or workload distribution to improve execution consistency."
-    elif high_prio_rate >= 50:
-        return "You assigned many high-priority tasks this week. Ensure they are distributed properly to avoid overload and stress."
-    elif completion_rate >= 80:
-        return "Excellent productivity this week. You completed most of your scheduled tasks. Your time management is consistent and effective."
-    else:
-        return "Your priority distribution is balanced. Small steps lead to big results. Stay consistent this week."
+    if t in CANCEL_WORDS:
+        cleared = {"title": "", "date": "", "time": "", "priority": "Medium", "category": "General"}
+        if _draft_ext is None: current_task = cleared
+        return {"type": "chat", "response": "Task cleared. " + OFF_TRACK_MSG, "task": cleared}
 
-def generate_monthly_insight(db_path, start_dt, completed, created, snoozed, sent):
-    """Generates general, non-personal behavioral insights for the 30-day period."""
-    import sqlite3
-    from datetime import datetime
-    
-    conn = sqlite3.connect(db_path, timeout=10, check_same_thread=False)
-    cur = conn.cursor()
-    
-    start_iso = start_dt.isoformat()
-    end_iso = datetime.utcnow().isoformat()
-    
-    from datetime import timedelta
-    
-    # Calculate Previous Month stats to determine Trends
-    prev_end = start_dt
-    prev_start = prev_end - timedelta(days=30)
-    prev_start_iso = prev_start.isoformat()
-    prev_end_iso = prev_end.isoformat()
-    
-    try:
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE status='completed' AND completed_iso >= ? AND completed_iso < ?", (prev_start_iso, prev_end_iso))
-        prev_completed = cur.fetchone()[0]
-    except: prev_completed = 0
-    
-    try:
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE due_iso >= ? AND due_iso < ? AND status != 'completed'", (start_iso, end_iso))
-        curr_missed = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE due_iso >= ? AND due_iso < ? AND status != 'completed'", (prev_start_iso, prev_end_iso))
-        prev_missed = cur.fetchone()[0]
-    except:
-        curr_missed = 0
-        prev_missed = 0
-        
-    try:
-        cur.execute("SELECT COUNT(*) FROM tasks WHERE created_iso >= ? AND created_iso < ?", (prev_start_iso, prev_end_iso))
-        prev_created = cur.fetchone()[0]
-    except: prev_created = 0
-    
-    conn.close()
-    
-    curr_rate = int((completed / created) * 100) if created > 0 else 0
-    prev_rate = int((prev_completed / prev_created) * 100) if prev_created > 0 else 0
+    # Catch greetings immediately
+    if re.match(GREETINGS_PATTERN, t):
+        cleared = {"title": "", "date": "", "time": "", "priority": "Medium", "category": "General"}
+        if _draft_ext is None: current_task = cleared
+        return {"type": "chat", "response": OFF_TRACK_MSG, "task": cleared}
 
-    # Trend and Consistency AI Engine Scenarios
-    if curr_rate > prev_rate and curr_rate > 0:
-        diff = curr_rate - prev_rate
-        return f"Compared to last month, your completion rate improved by {diff}%. Productivity momentum is increasing."
-    elif curr_missed > prev_missed and curr_missed > 0:
-        return "Overdue tasks increased this month. Review planning strategy for better time allocation."
-    elif snoozed > 5:
-        return "Persistent snoozing detected this month. Try breaking tasks down into smaller, immediately actionable steps."
-    elif completed > (created * 0.7) and created > 5:
-        return "Incredible monthly consistency! Executing your plan is paying off massively."
-    else:
-        return "Steady progress compounds over 30 days! Balance your planning with active completion."
+    # --- LOCAL PARSING ---
+    # ISOLATION: Remove dates before parsing time
+    time_search_text = text
+    date_patterns = [
+        r'\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)',
+        r'(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}',
+        r'\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b'
+    ]
+    for p in date_patterns:
+        time_search_text = re.sub(p, ' [DATE] ', time_search_text, flags=re.IGNORECASE)
+
+    parsed = _local_parse(text, now)
+    if parsed is None: parsed = {}
+    
+    # Special time parsing using isolated string
+    iso_time = _parse_time_local(time_search_text, now)
+    if iso_time: parsed["time"] = iso_time
+
+    # Reset draft if a new title is explicitly provided
+    if parsed.get("title") and task_draft.get("title") and parsed["title"].lower() != task_draft["title"].lower():
+        task_draft = {"title": "", "date": "", "time": "", "priority": "Medium", "category": "General"}
+
+    # CRITICAL FIX: Only overwrite date/time if the user isn't just saying "yes" or "ok"
+    if t not in CONFIRM_WORDS:
+        for field in ["title", "date", "time", "priority"]:
+            if parsed.get(field): 
+                # If we already have a time, and the new one is suspicious (matched from a date), ignore it
+                if field == "time" and task_draft.get("time") and not re.search(r'\d{1,2}(:|\s*(am|pm))', text.lower()):
+                    continue
+                task_draft[field] = parsed[field]
+    
+    # Only update category if we found a match OR if title is new
+    if parsed.get("category") and (parsed["category"] != "General" or parsed.get("title")):
+        task_draft["category"] = parsed["category"]
+
+    # --- CONVERSATIONAL / SMALL TALK HANDLER ---
+    if not parsed and not task_draft.get("title"):
+        # The user requested that out-of-context text uses the standard theme message
+        return {"type": "chat", "response": OFF_TRACK_MSG, "task": task_draft.copy()}
+
+    # --- GEMINI ENHANCEMENT ---
+    if task_draft.get("title") and (not task_draft.get("date") or not task_draft.get("time")):
+        task_draft = _gemini_enhance(text, task_draft, now)
+
+    if _draft_ext is None: current_task = task_draft
+
+    # --- VALIDATION ---
+    if not task_draft.get("title"):
+        return {"type": "chat", "response": OFF_TRACK_MSG, "task": task_draft.copy()}
+    
+    # Check for date and time BEFORE past-date check
+    if not task_draft.get("date"):
+        return {"type": "chat", "response": f"Got it — '{task_draft['title']}'! 📅 What date? (e.g. 'today', 'tomorrow')", "task": task_draft.copy()}
+    if not task_draft.get("time"):
+        return {"type": "chat", "response": f"Almost there! ⏰ What time for '{task_draft['title']}'? (e.g. '6 pm')", "task": task_draft.copy()}
+
+    # --- PAST DATE/TIME CHECK ---
+    try:
+        dt_str = f"{task_draft['date']} {task_draft['time']}"
+        target_dt = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+        
+        # If target is in the past compared to client time
+        if target_dt < now - timedelta(minutes=1):
+            # Critical block: Clear date/time from draft
+            task_draft["date"] = ""
+            task_draft["time"] = ""
+            if _draft_ext is None: current_task = task_draft
+            return {
+                "type": "chat",
+                "response": f"⚠️ I can't schedule that! The time {dt_str} is in the past. Please tell me a future time for '{task_draft['title']}'. 🚀",
+                "task": task_draft.copy()
+            }
+    except Exception as e:
+        print(f"Past validation error: {e}")
+
+    # Priority check
+    if task_draft.get("priority") == "Medium" and not parsed.get("priority"):
+        return {"type": "task", "response": f"One last thing! 📊 What priority for '{task_draft['title']}'? (Low, Medium, or High)", "task": task_draft.copy()}
+
+    # --- CONFIRMATION STEP ---
+    # Ask for confirmation if all fields are present but not confirmed
+    if t not in CONFIRM_WORDS:
+        response = (
+            f"✅ Task detected: '{task_draft['title']}' on {task_draft['date']} at {task_draft['time']}.\n"
+            f"Confirm? (yes / cancel) 🚀"
+        )
+        return {"type": "task", "response": response, "task": task_draft.copy()}
+
+    response = (
+        f"✅ Task saved: '{task_draft['title']}' for {task_draft['date']} at {task_draft['time']}."
+    )
+    return {"type": "ready_to_save", "response": response, "task": task_draft.copy()}
+
+def reset_task_state():
+    global current_task
+    current_task = {"title": "", "date": "", "time": "", "priority": "Medium", "category": "General"}
+
+def generate_weekly_insight(*args):
+    return _call_gemini("Generate a 1-sentence motivational insight about schedule management.") or "Great job organizing your day!"
+
+def generate_monthly_insight(*args):
+    return _call_gemini("Generate a 1-sentence monthly motivational insight for task completion.") or "You're building great habits!"

@@ -1,3 +1,8 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend_api", ".env"))
+
 # API Configuration
 # Please fill in your keys below.
 
@@ -20,7 +25,7 @@ FIREBASE_DATABASE_URL = "https://remindme-mounib-default-rtdb.asia-southeast1.fi
 
 # SMTP Email Configuration
 # Update these with your actual SMTP details (e.g., Gmail, Outlook)
-SMTP_SERVER = "smtp.gmail.com" 
-SMTP_PORT = 465
-SMTP_USER = "your_email@gmail.com"
-SMTP_PASSWORD = "your_app_password" 
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
+SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")

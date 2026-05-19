@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: remindme-backend
+    env: docker
+    dockerfilePath: backend_api/Dockerfile
+    dockerContext: backend_api
+    plan: free
+    numInstances: 1
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: SUPABASE_URL
+        sync: false
+        placeholder: "Enter your Supabase API URL (e.g. https://xxxx.supabase.co)"
+      - key: SUPABASE_KEY
+        sync: false
+        placeholder: "Enter your Supabase Service Role Key (starts with eyJ...)"
+      - key: SMTP_HOST
+        value: smtp.gmail.com
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+        placeholder: "Enter your Gmail recovery email address"
+      - key: SMTP_PASS
+        sync: false
+        placeholder: "Enter your Gmail App Password"
+      - key: SMTP_USERNAME
+        sync: false
+        placeholder: "Enter your Gmail recovery email address"
+      - key: SMTP_PASSWORD
+        sync: false
+        placeholder: "Enter your Gmail App Password"
