@@ -34,6 +34,11 @@ def health():
     return {"status": "ok", "service": "remindme-python-api"}
 
 
+@app.get("/")
+async def root():
+    return {"status": "online"}
+
+
 from app.routers import assistant, auth, analytics, tasks, system
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])

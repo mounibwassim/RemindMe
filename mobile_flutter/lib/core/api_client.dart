@@ -8,11 +8,18 @@ import '../models/audit_log.dart';
 import '../models/task.dart';
 
 class ApiClient {
-  ApiClient({required this.baseUrl, this.sessionId}) {
+  ApiClient({required String baseUrl, this.sessionId}) {
+    this.baseUrl = baseUrl;
     _shared = this;
   }
 
-  String baseUrl;
+  String _baseUrl = '';
+  String get baseUrl => _baseUrl;
+  set baseUrl(String value) {
+    _baseUrl = normalizeUrl(value);
+    debugPrint('ApiClient: Active API URL configured to: $_baseUrl');
+  }
+
   String? sessionId;
 
   static ApiClient? _shared;
@@ -21,11 +28,11 @@ class ApiClient {
     
     // Auto-detect environment base URL
     const explicitUrl = String.fromEnvironment('API_URL');
-    String detectedUrl = 'https://remindme-backend-k9mb.onrender.com';
+    String detectedUrl = 'https://remindme-backend.onrender.com';
     if (explicitUrl.isNotEmpty) {
       detectedUrl = explicitUrl;
     } else if (kReleaseMode) {
-      detectedUrl = 'https://remindme-backend-k9mb.onrender.com';
+      detectedUrl = 'https://remindme-backend.onrender.com';
     } else if (kIsWeb) {
       detectedUrl = 'http://localhost:8000';
     } else {
@@ -34,6 +41,45 @@ class ApiClient {
 
     _shared = ApiClient(baseUrl: detectedUrl);
     return _shared!;
+  }
+
+  static String normalizeUrl(String url) {
+    String normalized = url.trim();
+    if (normalized.isEmpty) return '';
+    
+    // Remove trailing slashes
+    while (normalized.endsWith('/')) {
+      normalized = normalized.substring(0, normalized.length - 1);
+    }
+    
+    // Enforce HTTPS in release mode for non-localhost/non-emulator URLs
+    if (kReleaseMode) {
+      if (normalized.startsWith('http://')) {
+        final host = normalized.substring(7);
+        if (!host.startsWith('localhost') && !host.startsWith('127.0.0.1') && !host.startsWith('10.0.2.2')) {
+          normalized = 'https://$host';
+        }
+      } else if (!normalized.startsWith('https://')) {
+        normalized = 'https://$normalized';
+      }
+    } else {
+      // In debug mode, if protocol is missing, add http:// by default
+      if (!normalized.startsWith('http://') && !normalized.startsWith('https://')) {
+        normalized = 'http://$normalized';
+      }
+    }
+    
+    // Validate URI
+    try {
+      final uri = Uri.parse(normalized);
+      if (uri.host.isEmpty) {
+        debugPrint('ApiClient Normalization Warning: Hostname is empty in parsed URL: "$normalized"');
+      }
+    } catch (e) {
+      debugPrint('ApiClient Normalization Error: Malformed URL parsing: "$normalized". Error: $e');
+    }
+    
+    return normalized;
   }
 
   void setSession(String? id) {
@@ -65,14 +111,16 @@ class ApiClient {
       _safeCall(() => http.patch(_uri(path), headers: _headers, body: body));
 
   Future<http.Response> _safeCall(Future<http.Response> Function() call) async {
-    int retries = 3;
-    Duration delay = const Duration(milliseconds: 500);
+    final isRender = baseUrl.contains('onrender.com');
+    final retries = isRender ? 4 : 3;
+    final timeoutDuration = isRender ? const Duration(seconds: 20) : const Duration(seconds: 15);
+    Duration delay = isRender ? const Duration(seconds: 2) : const Duration(milliseconds: 500);
     dynamic lastError;
 
     for (int i = 0; i < retries; i++) {
       try {
         debugPrint('ApiClient: Attempting network request (Try ${i + 1}/$retries) at $baseUrl...');
-        final response = await call().timeout(const Duration(seconds: 15));
+        final response = await call().timeout(timeoutDuration);
         return response;
       } catch (e) {
         lastError = e;
@@ -84,7 +132,7 @@ class ApiClient {
       }
     }
 
-    throw ApiException('Network unavailable. Operating in offline mode. Details: $lastError');
+    throw ApiException('Unable to connect to cloud server. Please check internet connection or backend deployment. Details: $lastError');
   }
 
   // ── Authentication ────────────────────────────────────────────────────────

@@ -86,6 +86,13 @@ void scheduleWebNotification({
     return;
   }
 
+  // JS setTimeout has a max delay of 2147483647 ms (approx 24.8 days).
+  // Anything larger overflows and fires immediately.
+  if (delay.inMilliseconds > 2147483647) {
+    debugPrint('WebNotifierWeb: Delay too large for web timer ($delay). Skipping scheduling for task $id.');
+    return;
+  }
+
   debugPrint('WebNotifierWeb: Scheduling task $id in ${delay.inSeconds}s (at $scheduledDate)');
   _webNotificationTimers[id] = Timer(delay, () {
     _webNotificationTimers.remove(id);

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -22,10 +23,11 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
     final session = prefs.getString('session_id');
 
     if (session != null) {
-      final api = ApiClient(
-        baseUrl: const String.fromEnvironment('API_URL',
-            defaultValue: 'https://remindme-backend-k9mb.onrender.com'),
-      );
+      const explicitUrl = String.fromEnvironment('API_URL');
+      final detectedUrl = explicitUrl.isNotEmpty
+          ? explicitUrl
+          : (kReleaseMode ? 'https://remindme-backend.onrender.com' : 'http://10.0.2.2:8000');
+      final api = ApiClient(baseUrl: detectedUrl);
       api.setSession(session);
 
       try {

@@ -92,7 +92,7 @@ class SnoozeTaskRequest(BaseModel):
 
 
 class NotificationEventRequest(BaseModel):
-    event: str = Field(pattern="^(notification_scheduled|notification_triggered|opened|dismissed|notification_test|reminder_missed|snoozed_from_notification|completed_from_notification)$")
+    event: str = Field(pattern="^(notification_scheduled|notification_triggered|opened|dismissed|notification_test|reminder_missed|snoozed_from_notification|completed_from_notification|missed)$")
     extra: str = ""
     notification_scheduled_at: Optional[str] = None
 

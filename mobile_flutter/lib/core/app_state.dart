@@ -22,7 +22,7 @@ class AppState extends ChangeNotifier {
       return explicitUrl;
     }
     if (kReleaseMode) {
-      return 'https://remindme-backend-k9mb.onrender.com';
+      return 'https://remindme-backend.onrender.com';
     }
     if (kIsWeb) {
       return 'http://localhost:8000';
@@ -50,6 +50,8 @@ class AppState extends ChangeNotifier {
   bool isReconnecting = false;
   bool isWarmingUp = false;
   List<Map<String, dynamic>> _offlineMutationQueue = [];
+  final Set<String> _loggedMissedTasks = {};
+  final Set<String> _loggedScheduledTasks = {};
 
   bool get isSignedIn => session != null;
   bool get isFirebaseUser => firebaseUid != null;
@@ -228,7 +230,9 @@ class AppState extends ChangeNotifier {
       if (normalized == 'https://remindme.onrender.com' ||
           normalized == 'http://remindme.onrender.com' ||
           normalized == 'https://api-remindme.onrender.com' ||
-          normalized == 'http://api-remindme.onrender.com') {
+          normalized == 'http://api-remindme.onrender.com' ||
+          normalized == 'https://remindme-backend-k9mb.onrender.com' ||
+          normalized == 'http://remindme-backend-k9mb.onrender.com') {
         await prefs.remove('custom_api_url');
         customUrl = null;
         debugPrint('AppState: Cleared defunct cached custom API URL.');
@@ -244,7 +248,7 @@ class AppState extends ChangeNotifier {
       if (explicitUrl.isNotEmpty) {
         api.baseUrl = explicitUrl;
       } else if (kReleaseMode) {
-        api.baseUrl = 'https://remindme-backend-k9mb.onrender.com';
+        api.baseUrl = 'https://remindme-backend.onrender.com';
       } else if (kIsWeb) {
         api.baseUrl = 'http://localhost:8000';
       } else {
@@ -263,8 +267,8 @@ class AppState extends ChangeNotifier {
           }
         } catch (e) {
           debugPrint(
-              'AppState: Android emulator local backend unreachable: $e. Using production backend fallback.');
-          api.baseUrl = 'https://remindme-backend-k9mb.onrender.com';
+              'AppState: Android emulator local backend unreachable: $e. Using local development default.');
+          api.baseUrl = 'http://10.0.2.2:8000';
         }
       }
     }
@@ -550,8 +554,10 @@ class AppState extends ChangeNotifier {
     for (final task in tasks
         .where((t) => !t.isCompleted && t.notificationStatus == 'pending')) {
       if (task.dueAt.isBefore(now.subtract(const Duration(minutes: 1)))) {
+        if (_loggedMissedTasks.contains(task.id)) continue;
         try {
           if (!isOffline) {
+            _loggedMissedTasks.add(task.id);
             await api.logNotificationEvent(
               task.id,
               'missed',
@@ -559,6 +565,7 @@ class AppState extends ChangeNotifier {
             );
           }
         } catch (e) {
+          _loggedMissedTasks.remove(task.id);
           debugPrint('AppState: Failed to log missed event for ${task.id}: $e');
         }
       }
@@ -627,6 +634,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> updateTask(String id, TaskDraft draft) async {
     await _guard(() async {
+      _loggedMissedTasks.remove(id);
+      _loggedScheduledTasks.remove(id);
       if (isOffline) {
         final idx = tasks.indexWhere((t) => t.id == id);
         if (idx != -1) {
@@ -693,6 +702,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> toggleTask(TaskItem task) async {
     await _guard(() async {
+      _loggedMissedTasks.remove(task.id);
+      _loggedScheduledTasks.remove(task.id);
       if (isOffline) {
         final isComp = task.isCompleted;
         final idx = tasks.indexWhere((t) => t.id == task.id);
@@ -729,6 +740,8 @@ class AppState extends ChangeNotifier {
 
   Future<void> snoozeTask(TaskItem task, int minutes) async {
     await _guard(() async {
+      _loggedMissedTasks.remove(task.id);
+      _loggedScheduledTasks.remove(task.id);
       if (isOffline) {
         final idx = tasks.indexWhere((t) => t.id == task.id);
         if (idx != -1) {
@@ -889,9 +902,11 @@ class AppState extends ChangeNotifier {
     for (final task in tasks.where((t) => !t.isCompleted)) {
       if (task.dueAt.isAfter(now)) {
         if (task.notificationStatus == 'pending' &&
-            task.category.toLowerCase() == 'call') {
+            task.category.toLowerCase() == 'call' &&
+            !_loggedScheduledTasks.contains(task.id)) {
           try {
             if (!isOffline) {
+              _loggedScheduledTasks.add(task.id);
               await api.logNotificationEvent(
                 task.id,
                 'notification_scheduled',
@@ -899,6 +914,7 @@ class AppState extends ChangeNotifier {
               );
             }
           } catch (e) {
+            _loggedScheduledTasks.remove(task.id);
             debugPrint(
                 'AppState: Failed to log notification_scheduled for task ${task.id}: $e');
           }
@@ -967,7 +983,7 @@ class AppState extends ChangeNotifier {
   Future<void> changeApiBaseUrl(String newUrl) async {
     final prefs = await SharedPreferences.getInstance();
     final url = newUrl.trim();
-    if (url.isEmpty || url == 'https://remindme-backend-k9mb.onrender.com') {
+    if (url.isEmpty || url == 'https://remindme-backend.onrender.com') {
       await prefs.remove('custom_api_url');
     } else {
       await prefs.setString('custom_api_url', url);
@@ -998,6 +1014,8 @@ class AppState extends ChangeNotifier {
     analytics = null;
     auditLogs = [];
     errorMessage = null;
+    _loggedMissedTasks.clear();
+    _loggedScheduledTasks.clear();
     _saveSession();
     notifyListeners();
   }
