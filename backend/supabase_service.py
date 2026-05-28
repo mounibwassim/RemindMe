@@ -5,13 +5,27 @@ from typing import List, Optional
 import json
 import logging
 
-# Configure logging to a file and console
-logging_config = {
-    "filename": os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend_errors.log"),
-    "level": logging.ERROR,
-    "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-}
-logging.basicConfig(**logging_config)
+# Configure logging dynamically (resilient to container permissions)
+log_file = None
+if os.environ.get("APP_ENV") != "production":
+    try:
+        log_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend_errors.log")
+        with open(log_file, 'a'):
+            pass
+    except Exception:
+        log_file = None
+
+if log_file:
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.ERROR,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
+else:
+    logging.basicConfig(
+        level=logging.ERROR,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    )
 
 # Add console handler
 console = logging.StreamHandler()

@@ -34,5 +34,5 @@ ENV PYTHONPATH=/app/backend_api:/app
 # Expose server port
 EXPOSE 8000
 
-# Start server using uvicorn binding to globally-routed interface
-CMD ["uvicorn", "backend_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Start server using uvicorn binding to globally-routed interface and dynamic PORT
+CMD uvicorn backend_api.app.main:app --host 0.0.0.0 --port $PORT

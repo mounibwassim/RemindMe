@@ -3,13 +3,27 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 import os
 
-# Set up logging to backend_errors.log
-log_file = os.path.join(os.getcwd(), '..', 'backend_errors.log')
-logging.basicConfig(
-    filename=log_file,
-    level=logging.ERROR,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Set up logging (resilient to container permission restrictions)
+log_file = None
+if os.environ.get("APP_ENV") != "production":
+    try:
+        log_file = os.path.join(os.getcwd(), '..', 'backend_errors.log')
+        with open(log_file, 'a'):
+            pass
+    except Exception:
+        log_file = None
+
+if log_file:
+    logging.basicConfig(
+        filename=log_file,
+        level=logging.ERROR,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+else:
+    logging.basicConfig(
+        level=logging.ERROR,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 logger = logging.getLogger("backend_api")
 
 from app.routers import assistant, auth, analytics, tasks
