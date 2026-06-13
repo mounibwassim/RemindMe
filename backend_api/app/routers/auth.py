@@ -195,6 +195,9 @@ def firebase_signin(payload: LoginRequest, request: Request):
     local_salt = load_salt_for(final_username, path=str(DATA_DIR))
     cloud_metadata = user_data.get("metadata") if user_data else None
     cloud_salt_hex = cloud_metadata.get("salt_hex") if isinstance(cloud_metadata, dict) else None
+    # passphrase_uid: the exact uid used in PBKDF2 key derivation for this user.
+    # May differ from Firebase uid for legacy accounts that were created with Supabase UUID.
+    cloud_passphrase_uid = cloud_metadata.get("passphrase_uid") if isinstance(cloud_metadata, dict) else None
     
     if cloud_salt_hex:
         if local_salt is None:
@@ -207,17 +210,22 @@ def firebase_signin(payload: LoginRequest, request: Request):
     elif local_salt is not None:
         try:
             salt_hex = local_salt.hex()
-            save_username_mapping(final_username, email, uid, metadata={"salt_hex": salt_hex})
+            save_username_mapping(final_username, email, uid, metadata={"salt_hex": salt_hex, "passphrase_uid": uid})
             print(f"DEBUG: Synced existing local salt for {final_username} to cloud mapping database.")
         except Exception as e:
             print(f"DEBUG ERROR: Failed to sync local salt to cloud: {e}")
     # ─────────────────────────────────────────────────────────────────────────
     
+    # Use the stored passphrase_uid if available (ensures correct key derivation
+    # for legacy accounts where Supabase UUID != Firebase uid)
+    secret_for_key = cloud_passphrase_uid if cloud_passphrase_uid else uid
+    print(f"DEBUG: Using passphrase_uid='{secret_for_key[:20]}...' for key derivation (firebase uid='{uid[:20]}...')")
+    
     print(f"DEBUG: Creating local encrypted session for {final_username}")
     session = create_dev_session(
         username=final_username,
         email=email,
-        secret=uid,
+        secret=secret_for_key,
         id_token=id_token,
         display_name=display_name,
         uid=uid,
