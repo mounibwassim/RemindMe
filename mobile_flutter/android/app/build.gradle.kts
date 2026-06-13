@@ -36,11 +36,12 @@ android {
             val storeFilePath = keystoreProperties.getProperty("storeFile")
             storeFile = storeFilePath?.let { file(it) }
             storePassword = keystoreProperties.getProperty("storePassword")
+            // Automatic signing configuration from key.properties
         }
     }
 
     defaultConfig {
-        applicationId = "com.remindme.app"
+        applicationId = "com.mounibwassim.remindme"
         // Android 6+ (minSdk 23) required for exact alarms and crypto APIs
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
