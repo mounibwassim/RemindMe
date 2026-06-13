@@ -216,13 +216,15 @@ class _TaskCard extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          _QuickAction(
-                            icon: Icons.snooze_rounded,
-                            label: 'Snooze',
-                            color: colors.primary,
-                            onTap: () => _showSnoozeMenu(context, state, task),
-                          ),
-                          const SizedBox(width: 12),
+                          if (!isOverdue && !task.isMissed && task.displayStatus != 'Missed') ...[
+                            _QuickAction(
+                              icon: Icons.snooze_rounded,
+                              label: 'Snooze',
+                              color: colors.primary,
+                              onTap: () => _showSnoozeMenu(context, state, task),
+                            ),
+                            const SizedBox(width: 12),
+                          ],
                           _QuickAction(
                             icon: Icons.delete_outline_rounded,
                             label: 'Delete',

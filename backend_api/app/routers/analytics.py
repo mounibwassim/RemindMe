@@ -15,13 +15,13 @@ router = APIRouter()
 
 
 @router.get("/summary", response_model=AnalyticsSummaryResponse)
-def summary(session: UserSession = Depends(get_session)):
-    return get_analytics_summary(session)
+def summary(session: UserSession = Depends(get_session), period: str = "week"):
+    return get_analytics_summary(session, period=period)
 
 
 @router.get("/audit", response_model=list[AuditLogResponse])
-def audit_logs(session: UserSession = Depends(get_session), limit: int = 50):
-    return get_recent_audit_logs(session, limit=limit)
+def audit_logs(session: UserSession = Depends(get_session), period: str = "week", limit: int = 200):
+    return get_recent_audit_logs(session, period=period, limit=limit)
 
 
 @router.delete("/audit/{log_id}", response_model=MessageResponse)

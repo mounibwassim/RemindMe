@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 
 import '../core/app_state.dart';
+import '../core/api_client.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -60,26 +61,6 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           // ── Futuristic Background ─────────────────────────────────
           const _FuturisticBackground(),
-
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              child: ClipOval(
-                child: BackdropFilter(
-                  filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-                  child: Container(
-                    color: Colors.white.withOpacity(0.08),
-                    child: IconButton(
-                      icon: const Icon(Icons.dns_outlined, color: Colors.white70),
-                      tooltip: 'Server Settings',
-                      onPressed: () => _showServerSettingsDialog(context, state),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
 
           SafeArea(
             child: Center(
@@ -179,7 +160,7 @@ class _LoginScreenState extends State<LoginScreen>
                                         fontSize: 13,
                                       ),
                                       tabs: const [
-                                        Tab(text: 'Sign In'),
+                                        Tab(text: 'Login'),
                                         Tab(text: 'Sign Up'),
                                       ],
                                     ),
@@ -193,8 +174,8 @@ class _LoginScreenState extends State<LoginScreen>
                                             const Duration(milliseconds: 300),
                                         curve: Curves.easeInOut,
                                         height: _tabController.index == 0
-                                            ? 280
-                                            : 400,
+                                            ? 300
+                                            : 420,
                                         child: TabBarView(
                                           controller: _tabController,
                                           children: [
@@ -216,6 +197,7 @@ class _LoginScreenState extends State<LoginScreen>
                       const SizedBox(height: 24),
                       TextButton(
                         onPressed: () {
+                          context.read<AppState>().clearError();
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -316,6 +298,7 @@ class _LoginScreenState extends State<LoginScreen>
         key: _formKey,
         child: Column(
           children: [
+            const SizedBox(height: 12),
             TextFormField(
               controller: _username,
               style: TextStyle(color: colors.onSurface, fontSize: 15),
@@ -364,7 +347,7 @@ class _LoginScreenState extends State<LoginScreen>
                         color: Colors.white,
                       ),
                     )
-                  : const Text('Sign In'),
+                  : const Text('Login'),
             ),
           ],
         ),
@@ -380,6 +363,7 @@ class _LoginScreenState extends State<LoginScreen>
         key: _signupFormKey,
         child: Column(
           children: [
+            const SizedBox(height: 12),
             TextFormField(
               controller: _displayName,
               decoration: const InputDecoration(
@@ -388,7 +372,8 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               validator: (v) {
                 if (v == null || v.isEmpty) return 'Username is required';
-                if (v.length < 2) return 'Username must be at least 2 characters';
+                if (v.length < 2)
+                  return 'Username must be at least 2 characters';
                 return null;
               },
             ),
@@ -467,11 +452,6 @@ class _LoginScreenState extends State<LoginScreen>
     );
   }
 
-  String? _required(String? value) {
-    if (value == null || value.trim().isEmpty) return 'Required';
-    return null;
-  }
-
   Future<void> _handleSignIn() async {
     if (!_formKey.currentState!.validate()) return;
     await context.read<AppState>().firebaseSignIn(
@@ -488,67 +468,6 @@ class _LoginScreenState extends State<LoginScreen>
           _displayName.text.trim(),
         );
   }
-
-  void _showServerSettingsDialog(BuildContext context, AppState state) {
-    final controller = TextEditingController(text: state.api.baseUrl);
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Server Configuration'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter the backend base URL. Change this to connect to localhost, an emulator, or your custom cloud server.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                style: const TextStyle(fontSize: 14),
-                decoration: const InputDecoration(
-                  labelText: 'API Base URL',
-                  hintText: 'https://example.onrender.com or http://10.0.2.2:8000',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                controller.text = 'https://remindme-backend.onrender.com';
-              },
-              child: const Text('Default Render'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final url = controller.text.trim();
-                if (url.isNotEmpty) {
-                  await state.changeApiBaseUrl(url);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('API URL updated to: $url')),
-                    );
-                    Navigator.pop(ctx);
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
 
 // ── Forgot Password Screen (embedded) ─────────────────────────────────────
@@ -564,6 +483,16 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
   final _username = TextEditingController();
   bool _sent = false;
   bool _completed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        context.read<AppState>().clearError();
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -643,7 +572,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'You can now sign in with your new password.',
+                            'You can now login with your new password.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: colors.onSurfaceVariant),
                           ),
@@ -653,7 +582,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                     const SizedBox(height: 16),
                     FilledButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Back to Sign In'),
+                      child: const Text('Back to Login'),
                     ),
                   ] else if (!_sent) ...[
                     if (state.errorMessage != null) ...[
@@ -743,7 +672,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                         Expanded(
                           child: FilledButton(
                             onPressed: () => Navigator.pop(context),
-                            child: const Text('Back to Sign In'),
+                            child: const Text('Back to Login'),
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -754,33 +683,22 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                               isScrollControlled: true,
                               backgroundColor: Colors.transparent,
                               builder: (context) => Container(
-                                height: MediaQuery.of(context).size.height * 0.85,
+                                height:
+                                    MediaQuery.of(context).size.height * 0.85,
                                 decoration: BoxDecoration(
                                   color: colors.surface,
-                                  borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(32)),
                                 ),
-                                child: _ResetPasswordScreen(email: state.email ?? _username.text.trim()),
+                                child: _ResetPasswordScreen(
+                                    email:
+                                        state.email ?? _username.text.trim()),
                               ),
                             );
                           },
                           child: const Text('Enter Code'),
                         ),
                       ],
-                    ),
-                  ],
-                  if (state.errorMessage != null && !_completed) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: colors.primary.withValues(alpha: 0.06),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Text(
-                        state.errorMessage!,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: colors.onSurfaceVariant),
-                      ),
                     ),
                   ],
                 ],
@@ -794,7 +712,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
 }
 
 class _FuturisticBackground extends StatelessWidget {
-  const _FuturisticBackground({super.key});
+  const _FuturisticBackground();
 
   @override
   Widget build(BuildContext context) {
@@ -962,6 +880,7 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
   final _password = TextEditingController();
   final _confirmPassword = TextEditingController();
   bool _obscurePassword = true;
+  bool _isSubmitting = false;
 
   @override
   void initState() {
@@ -979,11 +898,22 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
     super.dispose();
   }
 
-  bool get _isPasswordLengthInvalid => _password.text.isNotEmpty && _password.text.length < 8;
-  bool get _isConfirmInvalid => _confirmPassword.text.isNotEmpty && _password.text != _confirmPassword.text;
-  bool get _isValid => _code.text.length == 6 && _password.text.length >= 8 && _password.text == _confirmPassword.text;
+  bool get _isPasswordLengthInvalid =>
+      _password.text.isNotEmpty && _password.text.length < 8;
+  bool get _isConfirmInvalid =>
+      _confirmPassword.text.isNotEmpty &&
+      _password.text != _confirmPassword.text;
+  bool get _isValid =>
+      !_isSubmitting &&
+      _code.text.length == 6 &&
+      _password.text.length >= 8 &&
+      _password.text == _confirmPassword.text;
 
   Future<void> _handleReset() async {
+    if (_isSubmitting) return;
+    setState(() {
+      _isSubmitting = true;
+    });
     final state = context.read<AppState>();
     try {
       await state.confirmPasswordReset(
@@ -998,13 +928,38 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.popUntil(context, (route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
+        String msg;
+        if (e is ConnectionException) {
+          msg = 'Connection error. Please verify the backend server is running.';
+        } else {
+          final rawMsg = e.toString();
+          if (rawMsg.contains('getaddrinfo') ||
+              rawMsg.contains('SocketException') ||
+              rawMsg.contains('Failed host lookup')) {
+            msg = 'Database connection error. Please make sure the Supabase database is active/unpaused.';
+          } else {
+            msg = rawMsg;
+            if (msg.startsWith('Reset failed:')) {
+              msg = msg.substring('Reset failed:'.length).trim();
+            }
+          }
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Reset failed: $e')),
+          SnackBar(
+            content: Text('Reset failed: $msg'),
+            backgroundColor: Colors.redAccent,
+          ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+        Navigator.popUntil(context, (route) => route.isFirst);
       }
     }
   }
@@ -1055,8 +1010,11 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
                   labelText: 'New Password',
                   prefixIcon: const Icon(Icons.lock_outline),
                   suffixIcon: IconButton(
-                    icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                    icon: Icon(_obscurePassword
+                        ? Icons.visibility
+                        : Icons.visibility_off),
+                    onPressed: () =>
+                        setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
               ),
@@ -1065,7 +1023,10 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
                   padding: const EdgeInsets.only(top: 6, left: 12),
                   child: Text(
                     'Password must contain at least 8 characters.',
-                    style: TextStyle(color: colors.error, fontSize: 12, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                        color: colors.error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
                   ),
                 ),
             ],
@@ -1087,7 +1048,10 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
                   padding: const EdgeInsets.only(top: 6, left: 12),
                   child: Text(
                     'Passwords do not match.',
-                    style: TextStyle(color: colors.error, fontSize: 12, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                        color: colors.error,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500),
                   ),
                 ),
             ],
@@ -1098,7 +1062,11 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
             child: FilledButton(
               onPressed: (!_isValid || state.isLoading) ? null : _handleReset,
               child: state.isLoading
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
                   : const Text('Save New Password'),
             ),
           ),
@@ -1110,65 +1078,5 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
       ),
     );
   }
-
-  void _showServerSettingsDialog(BuildContext context, AppState state) {
-    final controller = TextEditingController(text: state.api.baseUrl);
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Server Configuration'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter the backend base URL. Change this to connect to localhost, an emulator, or your custom cloud server.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                style: const TextStyle(fontSize: 14),
-                decoration: const InputDecoration(
-                  labelText: 'API Base URL',
-                  hintText: 'https://example.onrender.com or http://10.0.2.2:8000',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                controller.text = 'https://remindme-backend.onrender.com';
-              },
-              child: const Text('Default Render'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final url = controller.text.trim();
-                if (url.isNotEmpty) {
-                  await state.changeApiBaseUrl(url);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('API URL updated to: $url')),
-                    );
-                    Navigator.pop(ctx);
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
 }
+

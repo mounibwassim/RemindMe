@@ -123,6 +123,53 @@ class DashboardScreen extends StatelessWidget {
               .shimmer(duration: 3000.ms, color: Colors.white12),
         ),
 
+        if (!state.isNotificationPermissionGranted)
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFF9500).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: const Color(0xFFFF9500).withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.notifications_paused_rounded,
+                        color: Color(0xFFFF9500)),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Notifications are Disabled',
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          Text(
+                            'Tap Enable to authorize alerts for your task deadlines.',
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        await state.requestNotificationPermissions();
+                      },
+                      child: const Text('Enable'),
+                    ),
+                  ],
+                ),
+              ).animate().shake(delay: 500.ms),
+            ),
+          ),
 
         if (analytics != null)
           SliverToBoxAdapter(

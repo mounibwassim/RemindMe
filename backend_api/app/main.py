@@ -1,3 +1,4 @@
+# Force uvicorn reload to pick up backend/ai_assistant.py changes
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
@@ -16,12 +17,12 @@ if os.environ.get("APP_ENV") != "production":
 if log_file:
     logging.basicConfig(
         filename=log_file,
-        level=logging.ERROR,
+        level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 else:
     logging.basicConfig(
-        level=logging.ERROR,
+        level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 logger = logging.getLogger("backend_api")

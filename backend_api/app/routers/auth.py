@@ -90,8 +90,16 @@ def firebase_signup(payload: RegisterRequest):
     id_token = data.get("idToken") or ""  # Ensure it's a string, not None
 
     safe_username = _safe_name(payload.display_name)
+    # Generate/save salt first so we can store it in the cloud mapping database
     update_profile(id_token, safe_username)
-    save_username_mapping(safe_username, payload.email, uid)
+    from backend.crypto import load_salt_for, save_salt_for, gen_salt
+    from backend_api.app.services.session_store import DATA_DIR
+    salt = load_salt_for(safe_username, path=str(DATA_DIR))
+    if salt is None:
+        salt = gen_salt()
+        save_salt_for(safe_username, salt, path=str(DATA_DIR))
+    
+    save_username_mapping(safe_username, payload.email, uid, metadata={"salt_hex": salt.hex()})
 
     session = create_dev_session(
         username=safe_username,
@@ -179,6 +187,31 @@ def firebase_signin(payload: LoginRequest, request: Request):
 
     # Retrieve avatar from mapping if it exists
     avatar_emoji = user_data.get("avatar_emoji", "") if user_data else ""
+
+    # ── Salt Sync & Restoration ──────────────────────────────────────────────
+    from backend.crypto import load_salt_for, save_salt_for
+    from backend_api.app.services.session_store import DATA_DIR
+    
+    local_salt = load_salt_for(final_username, path=str(DATA_DIR))
+    cloud_metadata = user_data.get("metadata") if user_data else None
+    cloud_salt_hex = cloud_metadata.get("salt_hex") if isinstance(cloud_metadata, dict) else None
+    
+    if cloud_salt_hex:
+        if local_salt is None:
+            try:
+                restored_salt = bytes.fromhex(cloud_salt_hex)
+                save_salt_for(final_username, restored_salt, path=str(DATA_DIR))
+                print(f"DEBUG: Restored local salt for {final_username} from cloud metadata.")
+            except Exception as e:
+                print(f"DEBUG ERROR: Failed to restore local salt: {e}")
+    elif local_salt is not None:
+        try:
+            salt_hex = local_salt.hex()
+            save_username_mapping(final_username, email, uid, metadata={"salt_hex": salt_hex})
+            print(f"DEBUG: Synced existing local salt for {final_username} to cloud mapping database.")
+        except Exception as e:
+            print(f"DEBUG ERROR: Failed to sync local salt to cloud: {e}")
+    # ─────────────────────────────────────────────────────────────────────────
     
     print(f"DEBUG: Creating local encrypted session for {final_username}")
     session = create_dev_session(
@@ -215,28 +248,44 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     # Rate limit: max 3 requests per 15 mins per IP
     check_rate_limit(f"forgot_password_{client_ip}", max_requests=3, window_minutes=15)
     
-    auth_logger.info("Hit forgot-password for %s from %s", payload.username, client_ip)
+    auth_logger.info(f"[Forgot Password] Request received for: {payload.username} from IP: {client_ip}")
     
     email = None
     
     if "@" in payload.username:
         email = payload.username.strip().lower()
-        # Verify if email actually exists
+        auth_logger.info(f"[Forgot Password] Input is an email. Checking existence of: {email}")
         user_res = supabase_admin.auth.admin.list_users()
         user = next((u for u in user_res if u.email == email), None)
         if not user:
+            auth_logger.warning(f"[Forgot Password] Email not registered: {email}")
             raise HTTPException(status_code=400, detail="This email is not registered.")
+        auth_logger.info(f"[Forgot Password] Registered user found for email: {email} (UID: {user.id})")
     else:
+        auth_logger.info(f"[Forgot Password] Input is a username. Resolving username: {payload.username}")
         user_data, error = get_username_data(payload.username)
         if error or not user_data:
+            auth_logger.warning(f"[Forgot Password] Username not registered: {payload.username}. Error: {error}")
             raise HTTPException(status_code=400, detail="This username is not registered.")
         email = user_data.get("email")
+        auth_logger.info(f"[Forgot Password] Mapped username {payload.username} to email: {email}")
     
+    auth_logger.info(f"[Forgot Password] Triggering OTP generation and email send to: {email}")
     data, error = reset_password_email(email)
+    
     if error:
-        auth_logger.error(f"Password recovery failed: {error}")
-        raise HTTPException(status_code=400, detail="Failed to send recovery email. Please try again.")
+        auth_logger.error(f"[Forgot Password] OTP Generation or system error: {error}")
+        raise HTTPException(status_code=400, detail=f"Failed to generate OTP or send email: {error}")
         
+    if data and data.get("message") == "OTP_GENERATED_BUT_EMAIL_FAILED":
+        err_msg = data.get("error") or "SMTP connection timeout"
+        auth_logger.error(f"[Forgot Password] OTP generated but email failed to send: {err_msg}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Failed to send recovery email. SMTP error: {err_msg}. Please verify configuration."
+        )
+        
+    auth_logger.info(f"[Forgot Password] Success! Recovery email successfully sent to {email}")
     return {"message": "Recovery email sent successfully."}
 
 

@@ -4,8 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
-import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tzdata;
 
 import 'app.dart';
 import 'core/app_state.dart';
@@ -13,7 +12,8 @@ import 'core/api_client.dart';
 import 'core/notification_service.dart';
 
 @pragma('vm:entry-point')
-void notificationTapBackground(NotificationResponse notificationResponse) async {
+void notificationTapBackground(
+    NotificationResponse notificationResponse) async {
   final actionId = notificationResponse.actionId;
   final payload = notificationResponse.payload;
 
@@ -26,7 +26,7 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
       const explicitUrl = String.fromEnvironment('API_URL');
       final detectedUrl = explicitUrl.isNotEmpty
           ? explicitUrl
-          : (kReleaseMode ? 'https://remindme-backend.onrender.com' : 'http://10.0.2.2:8000');
+          : 'https://remindme-backend-k9mb.onrender.com';
       final api = ApiClient(baseUrl: detectedUrl);
       api.setSession(session);
 
@@ -55,11 +55,18 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  tz.initializeTimeZones();
-  
+  tzdata.initializeTimeZones();
+
+  final prefs = await SharedPreferences.getInstance();
+  final themeStr = prefs.getString('theme_mode') ?? 'light';
+  final initialTheme = ThemeMode.values.firstWhere(
+    (m) => m.name == themeStr,
+    orElse: () => ThemeMode.light,
+  );
+
   runApp(
     ChangeNotifierProvider(
-      create: (_) => AppState(),
+      create: (_) => AppState(initialTheme: initialTheme),
       child: const RemindMeApp(),
     ),
   );

@@ -120,50 +120,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () => state.toggleThemeMode(),
                 ),
                 _SettingTile(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Notification Permissions',
-                  subtitle: state.isNotificationPermissionGranted
-                      ? 'Status: Active and enabled'
-                      : 'Status: Disabled (Tap to enable)',
-                  trailing: Icon(
-                    state.isNotificationPermissionGranted
-                        ? Icons.check_circle_rounded
-                        : Icons.error_outline_rounded,
-                    color: state.isNotificationPermissionGranted
-                        ? const Color(0xFF10B981)
-                        : Colors.redAccent,
-                    size: 20,
-                  ),
-                  onTap: () async {
-                    if (!state.isNotificationPermissionGranted) {
-                      _showInfoDialog(
-                        ctx,
-                        'Enable Notifications',
-                        'RemindMe uses local scheduled alarms to alert you on task deadlines and custom schedules. Please grant permissions to activate notifications.',
-                      );
-                      await state.requestNotificationPermissions();
-                    } else {
-                      _showInfoDialog(
-                        ctx,
-                        'Notifications Active',
-                        'System notifications and exact alarms are fully active and authorized.',
-                      );
-                    }
-                  },
-                ),
-                _SettingTile(
-                  icon: Icons.notifications_none_rounded,
-                  title: 'Send Test Notification',
-                  subtitle: 'Verify notification delivery & alerts',
-                  trailing: const Icon(Icons.send_rounded),
-                  onTap: () async {
-                    await state.sendTestNotification();
-                    ScaffoldMessenger.of(ctx).showSnackBar(
-                      const SnackBar(content: Text('Test notification sent!')),
-                    );
-                  },
-                ),
-                _SettingTile(
                   icon: Icons.psychology_outlined,
                   title: 'AI Assistant Settings',
                   subtitle:
@@ -171,15 +127,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: const Icon(Icons.chevron_right_rounded),
                   onTap: () => _showInfoDialog(ctx, 'AI Assistant Settings',
                       'Customize how your RemindMe Assistant helps organize and schedule your daily tasks.'),
-                ),
-                _SettingTile(
-                  icon: Icons.dns_outlined,
-                  title: 'Server Configuration',
-                  subtitle: 'Endpoint: ${state.api.baseUrl}',
-                  trailing: const Icon(Icons.edit_road_rounded),
-                  onTap: () {
-                    _showServerSettingsDialog(ctx, state);
-                  },
                 ),
               ], colors),
             ],
@@ -637,28 +584,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showLogsDialog(BuildContext context, String logs) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('System Logs'),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: SingleChildScrollView(
-            child: Text(
-              logs,
-              style: const TextStyle(fontFamily: 'monospace', fontSize: 10),
-            ),
-          ),
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-        ],
-      ),
-    );
-  }
-
   void _showAboutDialog(BuildContext context) {
     showAboutDialog(
       context: context,
@@ -684,87 +609,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showServerSettingsDialog(BuildContext context, AppState state) {
-    final controller = TextEditingController(text: state.api.baseUrl);
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Server Configuration'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Enter the backend base URL. Change this to connect to localhost, an emulator, or your custom cloud server.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: controller,
-                style: const TextStyle(fontSize: 14),
-                decoration: const InputDecoration(
-                  labelText: 'API Base URL',
-                  hintText: 'https://example.onrender.com or http://10.0.2.2:8000',
-                  border: OutlineInputBorder(),
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                controller.text = 'https://remindme-backend.onrender.com';
-              },
-              child: const Text('Default Render'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-              },
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final url = controller.text.trim();
-                if (url.isNotEmpty) {
-                  await state.changeApiBaseUrl(url);
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('API URL updated to: $url')),
-                    );
-                    Navigator.pop(ctx);
-                  }
-                }
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}
-
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      child: Text(
-        title.toUpperCase(),
-        style: GoogleFonts.montserrat(
-          fontSize: 11,
-          fontWeight: FontWeight.w800,
-          color: Theme.of(context).colorScheme.primary,
-          letterSpacing: 1.2,
-        ),
-      ),
-    );
-  }
 }
 
 class _SettingTile extends StatelessWidget {
@@ -841,7 +685,6 @@ class _ExpandableSection extends StatefulWidget {
     required this.title,
     required this.childrenBuilder,
     this.onExpand,
-    super.key,
   });
 
   final String title;
@@ -911,9 +754,14 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
     super.dispose();
   }
 
-  bool get _isPasswordLengthInvalid => newCtrl.text.isNotEmpty && newCtrl.text.length < 8;
-  bool get _isConfirmInvalid => confirmCtrl.text.isNotEmpty && newCtrl.text != confirmCtrl.text;
-  bool get _isValid => currentCtrl.text.isNotEmpty && newCtrl.text.length >= 8 && newCtrl.text == confirmCtrl.text;
+  bool get _isPasswordLengthInvalid =>
+      newCtrl.text.isNotEmpty && newCtrl.text.length < 8;
+  bool get _isConfirmInvalid =>
+      confirmCtrl.text.isNotEmpty && newCtrl.text != confirmCtrl.text;
+  bool get _isValid =>
+      currentCtrl.text.isNotEmpty &&
+      newCtrl.text.length >= 8 &&
+      newCtrl.text == confirmCtrl.text;
 
   Future<void> _handleUpdate(AppState state) async {
     try {
@@ -944,75 +792,91 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
 
     return AlertDialog(
       title: const Text('Secure Password Change'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Verify your identity to update security.',
-              style: TextStyle(fontSize: 12, color: Colors.grey)),
-          const SizedBox(height: 16),
-          TextField(
-            controller: currentCtrl,
-            obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              labelText: 'Current Password',
-              floatingLabelBehavior: FloatingLabelBehavior.always,
-              prefixIcon: const Icon(Icons.lock_person_outlined),
-              suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Verify your identity to update security.',
+                style: TextStyle(fontSize: 12, color: Colors.grey)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: currentCtrl,
+              obscureText: _obscurePassword,
+              decoration: InputDecoration(
+                labelText: 'Current Password',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                prefixIcon: const Icon(Icons.lock_person_outlined),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                      _obscurePassword ? Icons.visibility : Icons.visibility_off),
+                  onPressed: () =>
+                      setState(() => _obscurePassword = !_obscurePassword),
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: newCtrl,
-            obscureText: _obscurePassword,
-            decoration: const InputDecoration(
-              labelText: 'New Password',
-              floatingLabelBehavior: FloatingLabelBehavior.always,
-              prefixIcon: Icon(Icons.lock_outline),
-            ),
-          ),
-          if (_isPasswordLengthInvalid)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 12),
-              child: Text(
-                'Password must contain at least 8 characters.',
-                style: TextStyle(color: colors.error, fontSize: 12, fontWeight: FontWeight.w500),
+            const SizedBox(height: 12),
+            TextField(
+              controller: newCtrl,
+              obscureText: _obscurePassword,
+              decoration: const InputDecoration(
+                labelText: 'New Password',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                prefixIcon: Icon(Icons.lock_outline),
               ),
             ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: confirmCtrl,
-            obscureText: _obscurePassword,
-            decoration: const InputDecoration(
-              labelText: 'Confirm New Password',
-              floatingLabelBehavior: FloatingLabelBehavior.always,
-              prefixIcon: Icon(Icons.check_circle_outline),
-            ),
-          ),
-          if (_isConfirmInvalid)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 12),
-              child: Text(
-                'Passwords do not match.',
-                style: TextStyle(color: colors.error, fontSize: 12, fontWeight: FontWeight.w500),
+            if (_isPasswordLengthInvalid)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 12),
+                child: Text(
+                  'Password must contain at least 8 characters.',
+                  style: TextStyle(
+                      color: colors.error,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmCtrl,
+              obscureText: _obscurePassword,
+              decoration: const InputDecoration(
+                labelText: 'Confirm New Password',
+                floatingLabelBehavior: FloatingLabelBehavior.always,
+                prefixIcon: Icon(Icons.check_circle_outline),
               ),
             ),
-        ],
+            if (_isConfirmInvalid)
+              Padding(
+                padding: const EdgeInsets.only(top: 6, left: 12),
+                child: Text(
+                  'Passwords do not match.',
+                  style: TextStyle(
+                      color: colors.error,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500),
+                ),
+              ),
+          ],
+        ),
       ),
       actions: [
         TextButton(
-            onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel')),
         FilledButton(
-          onPressed: (!_isValid || state.isLoading) ? null : () => _handleUpdate(state),
+          onPressed: (!_isValid || state.isLoading)
+              ? null
+              : () => _handleUpdate(state),
           child: state.isLoading
-              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      strokeWidth: 2, color: Colors.white))
               : const Text('Update Security'),
         ),
       ],
     );
   }
 }
-

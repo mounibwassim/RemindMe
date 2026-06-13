@@ -4,9 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-
-import 'api_client.dart';
-import 'web_notifier_stub.dart' if (dart.library.js) 'web_notifier_web.dart' as web_notifier;
+import 'web_notifier_stub.dart' if (dart.library.js) 'web_notifier_web.dart'
+    as web_notifier;
 import '../main.dart';
 
 typedef NotificationTapHandler = void Function(String? payload);
@@ -88,7 +87,7 @@ class NotificationService {
 
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
-    
+
     await androidPlugin?.createNotificationChannel(
       AndroidNotificationChannel(
         taskChannelId,
@@ -117,7 +116,8 @@ class NotificationService {
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
-      _isPermissionGranted = await androidPlugin.areNotificationsEnabled() ?? false;
+      _isPermissionGranted =
+          await androidPlugin.areNotificationsEnabled() ?? false;
     }
   }
 

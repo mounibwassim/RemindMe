@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import 'tasks_screen.dart';
 
 import '../core/notification_service.dart';
 import '../core/app_state.dart';
+import '../models/task.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,15 +24,89 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
+  StreamSubscription<TaskItem>? _triggerSub;
 
   @override
   void initState() {
     super.initState();
     _requestNotificationPermission();
+
+    final state = context.read<AppState>();
+    _triggerSub = state.onTaskTriggered.listen((task) {
+      if (mounted) {
+        _showInAppNotificationDialog(task);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _triggerSub?.cancel();
+    super.dispose();
   }
 
   Future<void> _requestNotificationPermission() async {
     await NotificationService().requestPermissions();
+  }
+
+  void _showInAppNotificationDialog(TaskItem task) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        final colors = Theme.of(context).colorScheme;
+        return AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: Row(
+            children: [
+              Icon(Icons.alarm_on_rounded, color: colors.primary, size: 28),
+              const SizedBox(width: 12),
+              const Text('Task Alarm!'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                task.title,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+              if (task.description.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  task.description,
+                  style: TextStyle(color: colors.onSurfaceVariant),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+              },
+              child: const Text('Dismiss'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await context.read<AppState>().completeTask(task);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Task "${task.title}" completed!'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Complete Task'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   final _screens = const [

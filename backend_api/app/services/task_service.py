@@ -18,7 +18,7 @@ def _row_to_task(session: UserSession, row) -> TaskResponse:
     is_completed = row.get("is_completed", False)
     created_iso = row.get("created_at")
     
-    title = "Encrypted Task"
+    title = "Unable to decrypt task"
     desc = ""
     
     if encrypted_payload and ":" in encrypted_payload:
@@ -34,6 +34,13 @@ def _row_to_task(session: UserSession, row) -> TaskResponse:
                 title = plaintext
         except Exception as e:
             print(f"DEBUG: Decryption failed for task {task_id}: {e}")
+            title = "Unable to decrypt task"
+    else:
+        db_title = row.get("title")
+        if db_title:
+            title = db_title
+        else:
+            title = "Unable to decrypt task"
 
     # Overdue logic using proper datetime objects
     is_overdue = 0
@@ -80,6 +87,8 @@ def list_tasks_for_session(session: UserSession) -> list[TaskResponse]:
 
 
 def create_task_for_session(session: UserSession, payload: TaskCreateRequest) -> TaskResponse:
+    from backend.ai_assistant import sanitize_task_title
+    payload.title = sanitize_task_title(payload.title) or "Untitled Task"
     print(f"DEBUG: Creating task: {payload.title} for {session.uid}")
     full_text = f"{payload.title}\n{payload.description}"
     ct_b64, nonce_b64 = encrypt_bytes(full_text.encode("utf-8"), session.key)
@@ -108,6 +117,8 @@ def update_task_for_session(
     task_id: str,
     payload: TaskUpdateRequest,
 ) -> TaskResponse | None:
+    from backend.ai_assistant import sanitize_task_title
+    payload.title = sanitize_task_title(payload.title) or "Untitled Task"
     print(f"DEBUG: Updating task {task_id} for {session.uid}")
     full_text = f"{payload.title}\n{payload.description}"
     ct_b64, nonce_b64 = encrypt_bytes(full_text.encode("utf-8"), session.key)

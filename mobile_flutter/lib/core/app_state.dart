@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
@@ -11,7 +12,8 @@ import '../models/analytics_summary.dart';
 import '../models/audit_log.dart';
 
 class AppState extends ChangeNotifier {
-  AppState() {
+  AppState({ThemeMode initialTheme = ThemeMode.system}) {
+    themeMode = initialTheme;
     _loadSession();
   }
 
@@ -21,13 +23,7 @@ class AppState extends ChangeNotifier {
     if (explicitUrl.isNotEmpty) {
       return explicitUrl;
     }
-    if (kReleaseMode) {
-      return 'https://remindme-backend.onrender.com';
-    }
-    if (kIsWeb) {
-      return 'http://localhost:8000';
-    }
-    return 'http://10.0.2.2:8000'; // Sensible debug emulator default
+    return 'https://remindme-backend-k9mb.onrender.com';
   }
 
   final ApiClient api = ApiClient(baseUrl: _defaultBaseUrl);
@@ -63,9 +59,13 @@ class AppState extends ChangeNotifier {
   List<AuditLog> auditLogs = [];
 
   // ── Settings ──────────────────────────────────────────────────────────────
-  ThemeMode themeMode = ThemeMode.system;
+  ThemeMode themeMode = ThemeMode.light;
   bool notificationsEnabled = true;
   bool encryptionVisible = false;
+  String auditPeriod = "week"; // "week" or "month"
+
+  final StreamController<TaskItem> _triggeredTaskController = StreamController<TaskItem>.broadcast();
+  Stream<TaskItem> get onTaskTriggered => _triggeredTaskController.stream;
 
   bool get isNotificationPermissionGranted =>
       _notifications.isPermissionGranted;
@@ -84,14 +84,15 @@ class AppState extends ChangeNotifier {
     username = prefs.getString('username');
     avatarEmoji = prefs.getString('avatar_emoji');
 
-    final themeStr = prefs.getString('theme_mode') ?? 'system';
+    final themeStr = prefs.getString('theme_mode') ?? 'light';
     themeMode = ThemeMode.values.firstWhere(
       (m) => m.name == themeStr,
-      orElse: () => ThemeMode.system,
+      orElse: () => ThemeMode.light,
     );
 
     // Initial load from local cache to prevent blank screens
     await _loadLocalCache();
+    notifyListeners();
 
     // Trigger dynamic backend environment probing and warmup health check immediately on launch
     await performWarmupCheck();
@@ -225,14 +226,16 @@ class AppState extends ChangeNotifier {
 
     final prefs = await SharedPreferences.getInstance();
     String? customUrl = prefs.getString('custom_api_url');
+
     if (customUrl != null) {
       final normalized = customUrl.trim().toLowerCase();
+      // Clear defunct or legacy custom URLs
       if (normalized == 'https://remindme.onrender.com' ||
           normalized == 'http://remindme.onrender.com' ||
           normalized == 'https://api-remindme.onrender.com' ||
           normalized == 'http://api-remindme.onrender.com' ||
-          normalized == 'https://remindme-backend-k9mb.onrender.com' ||
-          normalized == 'http://remindme-backend-k9mb.onrender.com') {
+          normalized == 'https://remindme-backend.onrender.com' ||
+          normalized == 'http://remindme-backend.onrender.com') {
         await prefs.remove('custom_api_url');
         customUrl = null;
         debugPrint('AppState: Cleared defunct cached custom API URL.');
@@ -241,37 +244,14 @@ class AppState extends ChangeNotifier {
 
     if (customUrl != null && customUrl.isNotEmpty) {
       api.baseUrl = customUrl;
-      debugPrint('AppState: Using custom API URL: ${api.baseUrl}');
     } else {
-      // Auto-detect environment base URL dynamically
       const explicitUrl = String.fromEnvironment('API_URL');
-      if (explicitUrl.isNotEmpty) {
-        api.baseUrl = explicitUrl;
-      } else if (kReleaseMode) {
-        api.baseUrl = 'https://remindme-backend.onrender.com';
-      } else if (kIsWeb) {
-        api.baseUrl = 'http://localhost:8000';
-      } else {
-        // In mobile debug/profile modes, check if the local emulator FastAPI server is reachable
-        debugPrint('AppState: Probing dev environment reachability...');
-        try {
-          final localPing = await http
-              .get(Uri.parse('http://10.0.2.2:8000/health'))
-              .timeout(const Duration(milliseconds: 1500));
-          if (localPing.statusCode == 200) {
-            api.baseUrl = 'http://10.0.2.2:8000';
-            debugPrint(
-                'AppState: Android emulator local backend detected at ${api.baseUrl}');
-          } else {
-            throw Exception('Localhost status ${localPing.statusCode}');
-          }
-        } catch (e) {
-          debugPrint(
-              'AppState: Android emulator local backend unreachable: $e. Using local development default.');
-          api.baseUrl = 'http://10.0.2.2:8000';
-        }
-      }
+      api.baseUrl = explicitUrl.isNotEmpty 
+          ? explicitUrl 
+          : 'https://remindme-backend-k9mb.onrender.com';
     }
+
+    debugPrint('AppState: Final API URL configured to: ${api.baseUrl}');
 
     final stopwatch = Stopwatch()..start();
     try {
@@ -409,31 +389,39 @@ class AppState extends ChangeNotifier {
 
   Future<void> login(String emailInput, String password) async {
     await _guard(() async {
-      final res = await api.login(emailInput, password);
-      session = res['session_id'];
-      firebaseUid = res['user_uid'];
-      displayName = res['display_name'];
-      email = res['email'];
-      username = res['username'];
-      avatarEmoji = res['avatar_emoji'];
-      api.setSession(session!);
-      await _saveSession();
-      await refreshAll();
+      try {
+        final res = await api.login(emailInput, password);
+        session = res['session_id'];
+        firebaseUid = res['user_uid'];
+        displayName = res['display_name'];
+        email = res['email'];
+        username = res['username'];
+        avatarEmoji = res['avatar_emoji'];
+        api.setSession(session!);
+        await _saveSession();
+        await refreshAll();
+      } catch (e) {
+        throw ApiException('Login failed');
+      }
     });
   }
 
   Future<void> devLogin(
       String usernameInput, String emailInput, String secret) async {
     await _guard(() async {
-      final res = await api.devLogin(usernameInput, emailInput, secret);
-      session = res['session_id'];
-      username = res['username'];
-      email = res['email'];
-      firebaseUid = null;
-      displayName = res['username'];
-      api.setSession(session!);
-      await _saveSession();
-      await refreshAll();
+      try {
+        final res = await api.devLogin(usernameInput, emailInput, secret);
+        session = res['session_id'];
+        username = res['username'];
+        email = res['email'];
+        firebaseUid = null;
+        displayName = res['username'];
+        api.setSession(session!);
+        await _saveSession();
+        await refreshAll();
+      } catch (e) {
+        throw ApiException('Login failed');
+      }
     });
   }
 
@@ -470,7 +458,18 @@ class AppState extends ChangeNotifier {
       notifyListeners();
     } catch (e, stack) {
       debugPrint('ForgotPassword Critical Failure: $e');
-      errorMessage = e.toString();
+      if (e is ConnectionException) {
+        errorMessage = 'Connection error. Please verify the backend server is running.';
+      } else {
+        final msg = e.toString();
+        if (msg.contains('getaddrinfo') ||
+            msg.contains('SocketException') ||
+            msg.contains('Failed host lookup')) {
+          errorMessage = 'Database connection error. Please make sure the Supabase database is active/unpaused.';
+        } else {
+          errorMessage = msg;
+        }
+      }
       await api.logError('ForgotPassword error: $e\n$stack');
       notifyListeners();
       rethrow;
@@ -493,6 +492,12 @@ class AppState extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  void clearError() {
+    errorMessage = null;
+    successMessage = null;
+    notifyListeners();
   }
 
   Future<void> updateAvatar(String avatar) async {
@@ -529,14 +534,14 @@ class AppState extends ChangeNotifier {
       isOffline = false;
 
       try {
-        analytics = await api.getAnalyticsSummary();
+        analytics = await api.getAnalyticsSummary(period: auditPeriod);
       } catch (e) {
         debugPrint('AppState: Analytics fetch failed: $e');
         analytics = _calculateFallbackAnalytics(tasks);
       }
 
       try {
-        auditLogs = await api.getAuditLogs(limit: 50);
+        auditLogs = await api.getAuditLogs(limit: 100, period: auditPeriod);
       } catch (e) {
         debugPrint('AppState: Audit logs fetch failed: $e');
         auditLogs = [];
@@ -926,6 +931,7 @@ class AppState extends ChangeNotifier {
           body: 'Alarm: ${task.title} is due now!',
           scheduledDate: task.dueAt,
           onTriggered: () {
+            _triggeredTaskController.add(task);
             if (!isOffline) {
               api
                   .logNotificationEvent(task.id, 'notification_triggered')
@@ -954,7 +960,12 @@ class AppState extends ChangeNotifier {
   // ── Settings ──────────────────────────────────────────────────────────────
 
   void toggleThemeMode() {
-    themeMode = themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    if (themeMode == ThemeMode.system) {
+      final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      themeMode = brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark;
+    } else {
+      themeMode = themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    }
     _saveThemePreference();
     notifyListeners();
   }
@@ -963,6 +974,11 @@ class AppState extends ChangeNotifier {
     themeMode = mode;
     _saveThemePreference();
     notifyListeners();
+  }
+
+  void setAuditPeriod(String period) {
+    auditPeriod = period;
+    refreshAll();
   }
 
   void toggleEncryptionVisibility() {
@@ -983,7 +999,7 @@ class AppState extends ChangeNotifier {
   Future<void> changeApiBaseUrl(String newUrl) async {
     final prefs = await SharedPreferences.getInstance();
     final url = newUrl.trim();
-    if (url.isEmpty || url == 'https://remindme-backend.onrender.com') {
+    if (url.isEmpty || url == 'https://remindme-backend-k9mb.onrender.com') {
       await prefs.remove('custom_api_url');
     } else {
       await prefs.setString('custom_api_url', url);
@@ -1038,7 +1054,18 @@ class AppState extends ChangeNotifier {
       return await action();
     } catch (e, stack) {
       debugPrint('AppState Error: $e\n$stack');
-      errorMessage = e.toString();
+      if (e is ConnectionException) {
+        errorMessage = 'Connection error. Please verify the backend server is running.';
+      } else {
+        final msg = e.toString();
+        if (msg.contains('getaddrinfo') ||
+            msg.contains('SocketException') ||
+            msg.contains('Failed host lookup')) {
+          errorMessage = 'Database connection error. Please make sure the Supabase database is active/unpaused.';
+        } else {
+          errorMessage = msg;
+        }
+      }
       try {
         if (!isOffline) {
           await api.logError('Frontend Error: $e\nStack: $stack');
@@ -1050,5 +1077,11 @@ class AppState extends ChangeNotifier {
       isLoading = false;
       notifyListeners();
     }
+  }
+
+  @override
+  void dispose() {
+    _triggeredTaskController.close();
+    super.dispose();
   }
 }

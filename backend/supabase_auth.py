@@ -45,7 +45,7 @@ def send_native_email(to_email, otp_code):
         """
         msg.attach(MIMEText(body, 'plain'))
         
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
         server.starttls()
         server.login(SMTP_USER, SMTP_PASS)
         server.send_message(msg)

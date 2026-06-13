@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, date
+from datetime import datetime, timedelta, date, timezone
 
 from app.schemas import AnalyticsSummaryResponse, AuditLogResponse
 from app.services.insights_service import InsightsService
@@ -7,12 +7,11 @@ from app.services.task_service import list_tasks_for_session
 import backend.supabase_service as supabase
 
 
-def get_analytics_summary(session: UserSession) -> AnalyticsSummaryResponse:
+def get_analytics_summary(session: UserSession, period: str = "week") -> AnalyticsSummaryResponse:
     task_models = list_tasks_for_session(session)
     ai_insight = InsightsService.generate_insights(task_models)
 
     total = len(task_models)
-    from datetime import timezone
     now_utc = datetime.now(timezone.utc)
     
     pending_tasks = []
@@ -72,27 +71,30 @@ def get_analytics_summary(session: UserSession) -> AnalyticsSummaryResponse:
     task_notified_times = {}
     response_times = []
 
-    # Weekly Stats (Monday Fresh)
+    # Weekly/Monthly Stats
     today_dt = datetime.now()
-    monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-    
-    # Define week range [monday .. sunday]
-    # To fix timezone discrepancy, compare the LOCAL representation of the UTC timestamp
-    # against the LOCAL week boundaries.
-    monday_date = monday.date()
-    sunday_date = (monday + timedelta(days=6)).date()
+    if period == "month":
+        start_date = today_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date()
+        if today_dt.month == 12:
+            end_date = date(today_dt.year + 1, 1, 1) - timedelta(days=1)
+        else:
+            end_date = date(today_dt.year, today_dt.month + 1, 1) - timedelta(days=1)
+    else:
+        # Default to week
+        monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_date = monday.date()
+        end_date = (monday + timedelta(days=6)).date()
 
-    def _date_in_week(ts_str: str) -> bool:
+    def _date_in_period(ts_str: str) -> bool:
         if not ts_str: return False
         try:
             # Parse as UTC and convert to local server timezone
             clean_iso = ts_str.replace("Z", "+00:00")
             dt = datetime.fromisoformat(clean_iso)
             if dt.tzinfo is None:
-                from datetime import timezone
                 dt = dt.replace(tzinfo=timezone.utc)
             local_dt = dt.astimezone()
-            return monday_date <= local_dt.date() <= sunday_date
+            return start_date <= local_dt.date() <= end_date
         except Exception as e:
             print(f"Error parsing date {ts_str}: {e}")
             return False
@@ -107,8 +109,8 @@ def get_analytics_summary(session: UserSession) -> AnalyticsSummaryResponse:
         except:
             continue
 
-        # Only count events from this week as requested
-        if not _date_in_week(created_at):
+        # Only count events from this period as requested
+        if not _date_in_period(created_at):
             continue
 
         if action in ["notification_notified", "notification_triggered", "notification_sent", "notification_notification_triggered"]:
@@ -149,17 +151,17 @@ def get_analytics_summary(session: UserSession) -> AnalyticsSummaryResponse:
     completion_rate = round((completed_count / total) * 100, 1) if total else 0.0
     audit["completion_rate"] = completion_rate
 
-    # Calculate actual weekly completions and creations directly from tasks, 
+    # Calculate actual completions and creations directly from tasks, 
     # not from audit logs which might truncate.
-    completed_week = 0
-    created_week = 0
+    completed_period = 0
+    created_period = 0
     for task in task_models:
-        if task.created_iso and _date_in_week(task.created_iso):
-            created_week += 1
-        if task.completed_iso and _date_in_week(task.completed_iso):
-            completed_week += 1
+        if task.created_iso and _date_in_period(task.created_iso):
+            created_period += 1
+        if task.completed_iso and _date_in_period(task.completed_iso):
+            completed_period += 1
 
-    snoozed_week = audit["snoozed_events"]
+    snoozed_period = audit["snoozed_events"]
     
     return AnalyticsSummaryResponse(
         total_tasks=total,
@@ -172,9 +174,9 @@ def get_analytics_summary(session: UserSession) -> AnalyticsSummaryResponse:
         audit=audit,
         completion_rate=completion_rate,
         ai_insight=ai_insight,
-        completed_this_week=completed_week,
-        snoozed_this_week=snoozed_week,
-        created_this_week=created_week,
+        completed_this_week=completed_period,
+        snoozed_this_week=snoozed_period,
+        created_this_week=created_period,
     )
 
 
@@ -215,17 +217,53 @@ def _get_weekly_distribution_in_memory(tasks: list) -> dict:
     }
 
 
-def get_recent_audit_logs(session: UserSession, limit: int = 50) -> list[AuditLogResponse]:
+def get_recent_audit_logs(session: UserSession, period: str = "week", limit: int = 200) -> list[AuditLogResponse]:
+    # ── Auto Cleanup Old Weeks ──────────────────────────────────────
+    try:
+        today_dt = datetime.now()
+        monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        monday_utc = monday.astimezone(timezone.utc)
+        monday_utc_iso = monday_utc.isoformat()
+        
+        # Delete from Supabase table
+        supabase.supabase.table("audit_logs").delete().eq("user_id", session.uid).lt("created_at", monday_utc_iso).execute()
+        print(f"DEBUG: Cleaned up old audit logs older than {monday_utc_iso}")
+    except Exception as e:
+        print(f"Error during auto-cleanup of old audit logs: {e}")
+
     try:
         rows = supabase.get_audit_logs(session.uid, limit=limit)
         logs: list[AuditLogResponse] = []
+        
+        today_dt = datetime.now()
+        monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        first_of_month = today_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        monday_utc = monday.astimezone(timezone.utc)
+        first_of_month_utc = first_of_month.astimezone(timezone.utc)
+        
         for row in rows:
+            created_at = row.get("created_at", "")
+            try:
+                ts = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+            except:
+                continue
+                
+            if period == "week":
+                if ts < monday_utc:
+                    continue
+            elif period == "month":
+                if ts < first_of_month_utc:
+                    continue
+                    
             logs.append(
                 AuditLogResponse(
                     id=row.get("id"),
                     task_id=None, # Supabase logs don't always have task_id linked directly in same schema
                     event=row.get("action", ""),
-                    timestamp_iso=row.get("created_at", ""),
+                    timestamp_iso=created_at,
                     user_uid=row.get("user_id", ""),
                     extra=row.get("details", ""),
                     notification_scheduled_at=row.get("notification_scheduled_at"),

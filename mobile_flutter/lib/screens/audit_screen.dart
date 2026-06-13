@@ -25,13 +25,21 @@ class _AuditScreenState extends State<AuditScreen> {
     'snoozed',
   ];
 
-  String _getWeekRange() {
+  String _getPeriodRange(String period) {
     final now = DateTime.now();
-    final monday = now.subtract(Duration(days: now.weekday - 1));
-    final sunday = monday.add(const Duration(days: 6));
-    final format = DateFormat('MMM d');
-    final yearFormat = DateFormat('y');
-    return '${format.format(monday)} - ${format.format(sunday)}, ${yearFormat.format(sunday)}';
+    if (period == 'month') {
+      final firstDay = DateTime(now.year, now.month, 1);
+      final lastDay = DateTime(now.year, now.month + 1, 0);
+      final format = DateFormat('MMM d');
+      final yearFormat = DateFormat('y');
+      return '${format.format(firstDay)} - ${format.format(lastDay)}, ${yearFormat.format(lastDay)}';
+    } else {
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      final sunday = monday.add(const Duration(days: 6));
+      final format = DateFormat('MMM d');
+      final yearFormat = DateFormat('y');
+      return '${format.format(monday)} - ${format.format(sunday)}, ${yearFormat.format(sunday)}';
+    }
   }
 
   @override
@@ -44,11 +52,45 @@ class _AuditScreenState extends State<AuditScreen> {
       backgroundColor: Colors.transparent,
       body: CustomScrollView(
         slivers: [
-          // ── Weekly Performance (Premium Glassmorphism Card) ────────
+          // ── Period Selector Segmented Button ──────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
+              child: SegmentedButton<String>(
+                style: SegmentedButton.styleFrom(
+                  backgroundColor: colors.surfaceContainerHighest.withValues(alpha: 0.1),
+                  selectedBackgroundColor: colors.primary,
+                  selectedForegroundColor: colors.onPrimary,
+                  textStyle: GoogleFonts.montserrat(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+                segments: const [
+                  ButtonSegment<String>(
+                    value: 'week',
+                    label: Text('Current Week'),
+                    icon: Icon(Icons.view_week_rounded, size: 18),
+                  ),
+                  ButtonSegment<String>(
+                    value: 'month',
+                    label: Text('Current Month'),
+                    icon: Icon(Icons.calendar_month_rounded, size: 18),
+                  ),
+                ],
+                selected: {state.auditPeriod},
+                onSelectionChanged: (newSelection) {
+                  state.setAuditPeriod(newSelection.first);
+                },
+              ),
+            ),
+          ),
+
+          // ── Weekly/Monthly Performance Header ────────────────────────
           if (state.analytics != null)
             SliverToBoxAdapter(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                padding: const EdgeInsets.fromLTRB(24, 20, 24, 12),
                 child: Row(
                   children: [
                     Container(
@@ -64,7 +106,7 @@ class _AuditScreenState extends State<AuditScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'WEEKLY PERFORMANCE',
+                          state.auditPeriod == 'month' ? 'MONTHLY PERFORMANCE' : 'WEEKLY PERFORMANCE',
                           style: GoogleFonts.montserrat(
                             fontWeight: FontWeight.w900,
                             fontSize: 14,
@@ -73,7 +115,7 @@ class _AuditScreenState extends State<AuditScreen> {
                           ),
                         ),
                         Text(
-                          _getWeekRange(),
+                          _getPeriodRange(state.auditPeriod),
                           style: TextStyle(
                             fontSize: 12, 
                             fontWeight: FontWeight.w600,

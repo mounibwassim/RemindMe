@@ -28,16 +28,9 @@ class ApiClient {
     
     // Auto-detect environment base URL
     const explicitUrl = String.fromEnvironment('API_URL');
-    String detectedUrl = 'https://remindme-backend.onrender.com';
-    if (explicitUrl.isNotEmpty) {
-      detectedUrl = explicitUrl;
-    } else if (kReleaseMode) {
-      detectedUrl = 'https://remindme-backend.onrender.com';
-    } else if (kIsWeb) {
-      detectedUrl = 'http://localhost:8000';
-    } else {
-      detectedUrl = 'http://10.0.2.2:8000'; // Sensible debug emulator default
-    }
+    String detectedUrl = explicitUrl.isNotEmpty
+        ? explicitUrl
+        : 'https://remindme-backend-k9mb.onrender.com';
 
     _shared = ApiClient(baseUrl: detectedUrl);
     return _shared!;
@@ -52,13 +45,11 @@ class ApiClient {
       normalized = normalized.substring(0, normalized.length - 1);
     }
     
-    // Enforce HTTPS in release mode for non-localhost/non-emulator URLs
+    // Enforce HTTPS in release mode
     if (kReleaseMode) {
       if (normalized.startsWith('http://')) {
         final host = normalized.substring(7);
-        if (!host.startsWith('localhost') && !host.startsWith('127.0.0.1') && !host.startsWith('10.0.2.2')) {
-          normalized = 'https://$host';
-        }
+        normalized = 'https://$host';
       } else if (!normalized.startsWith('https://')) {
         normalized = 'https://$normalized';
       }
@@ -132,7 +123,7 @@ class ApiClient {
       }
     }
 
-    throw ApiException('Unable to connect to cloud server. Please check internet connection or backend deployment. Details: $lastError');
+    throw ConnectionException('Unable to connect to cloud server. Please check internet connection or backend deployment. Details: $lastError');
   }
 
   // ── Authentication ────────────────────────────────────────────────────────
@@ -288,13 +279,13 @@ class ApiClient {
 
   // ── Analytics ─────────────────────────────────────────────────────────────
 
-  Future<AnalyticsSummary> getAnalyticsSummary() async {
-    final response = await _get('/api/v1/analytics/summary');
+  Future<AnalyticsSummary> getAnalyticsSummary({String period = "week"}) async {
+    final response = await _get('/api/v1/analytics/summary?period=$period');
     return AnalyticsSummary.fromJson(_decode(response));
   }
 
-  Future<List<AuditLog>> getAuditLogs({int limit = 50}) async {
-    final response = await _get('/api/v1/analytics/audit?limit=$limit');
+  Future<List<AuditLog>> getAuditLogs({int limit = 50, String period = "week"}) async {
+    final response = await _get('/api/v1/analytics/audit?limit=$limit&period=$period');
     final data = _decode(response) as List<dynamic>;
     return data.map((item) => AuditLog.fromJson(item)).toList();
   }
@@ -359,4 +350,8 @@ class ApiException implements Exception {
   final String message;
   @override
   String toString() => message;
+}
+
+class ConnectionException extends ApiException {
+  ConnectionException(super.message);
 }

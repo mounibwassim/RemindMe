@@ -10,7 +10,7 @@ def send_email(to_email, subject, body):
     Returns: (bool success, str error_message)
     """
     if not SMTP_HOST or not SMTP_USERNAME or not SMTP_PASSWORD:
-        logging.error("SMTP Configuration missing in config.py")
+        logging.error("[Forgot Password] SMTP Send: Configuration missing in config.py")
         return False, "SMTP Configuration missing in config.py"
 
     try:
@@ -21,25 +21,27 @@ def send_email(to_email, subject, body):
 
         msg.attach(MIMEText(body, 'plain'))
 
-        logging.info(f"Attempting to connect to SMTP server {SMTP_HOST}:{SMTP_PORT}")
-        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+        logging.info(f"[Forgot Password] SMTP Send: Attempting to connect to SMTP server {SMTP_HOST}:{SMTP_PORT} using user {SMTP_USERNAME}...")
+        server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+        logging.info("[Forgot Password] SMTP Send: Connected. Starting STARTTLS...")
         
         # Validate TLS connection
         status, response = server.starttls()
+        logging.info(f"[Forgot Password] SMTP Send: STARTTLS response status={status}, msg={response}")
         if status != 220:
-            logging.error(f"Failed to establish secure TLS connection: {status} {response}")
+            logging.error(f"[Forgot Password] SMTP Send: Failed to establish secure TLS connection: {status} {response}")
             return False, "Failed to establish secure TLS connection"
             
-        logging.info("TLS connection established securely.")
+        logging.info("[Forgot Password] SMTP Send: TLS connection established securely. Logging in...")
         
         server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        logging.info("SMTP authentication successful.")
+        logging.info("[Forgot Password] SMTP Send: SMTP authentication successful. Sending message...")
         
         text = msg.as_string()
         server.sendmail(SMTP_USERNAME, to_email, text)
         server.quit()
         
-        logging.info(f"Email successfully sent to {to_email}")
+        logging.info(f"[Forgot Password] SMTP Send: Email successfully sent to {to_email}")
         return True, None
     except smtplib.SMTPAuthenticationError as e:
         logging.error(f"SMTP Authentication Error: {e}")

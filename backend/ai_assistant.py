@@ -230,26 +230,88 @@ def _detect_priority(text: str) -> str:
     if any(w in t for w in ["low", "whenever", "not urgent", "someday"]): return "Low"
     return "Medium"
 
+def sanitize_task_title(title: str) -> str:
+    if not title:
+        return ""
+    words = title.strip().split()
+    connector_words = {
+        "by", "on", "in", "at", "for", "with", "to", "from", "of", "about",
+        "the", "a", "an", "during", "before", "after", "around", "near"
+    }
+
+    # Strip leading/trailing prepositions and connector words recursively
+    changed = True
+    while changed:
+        changed = False
+        if words and words[-1].lower() in connector_words:
+            words.pop()
+            changed = True
+        if words and words[0].lower() in connector_words:
+            words.pop(0)
+            changed = True
+
+    t = " ".join(words)
+    t = t.strip(" ,.-")
+    return t.capitalize() if t else ""
+
+
 def _build_title(text: str) -> str:
     t = text.strip()
-    # Strip dates like DD/MM/YYYY
-    t = re.sub(r'\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b', '', t)
-    # Strip times
-    t = re.sub(r'\bat\s*\d{1,2}(?::\d{2})?\s*(?:am|pm)?', '', t, flags=re.IGNORECASE)
-    t = re.sub(r'\b\d{1,2}(?::\d{2})?\s*(?:am|pm)', '', t, flags=re.IGNORECASE)
-    # Strip keywords
-    for phrase in ["today", "tonight", "tomorrow", "this morning", "this evening", "this afternoon", "next week", "next month", "next year", "in \d+ days?", "in \d+ weeks?"] + list(WEEKDAY_MAP.keys()):
-        t = re.sub(rf'\b(next\s+)?{phrase}\b', '', t, flags=re.IGNORECASE)
-    # Strip month names and dates like "23rd may", "may 23"
-    months = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december",
-              "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
-    for m in months:
-        t = re.sub(rf'\b\d{{1,2}}(?:st|nd|rd|th)?\s+(?:of\s+)?{m}\b', '', t, flags=re.IGNORECASE)
-        t = re.sub(rf'\b{m}\s+\d{{1,2}}(?:st|nd|rd|th)?\b', '', t, flags=re.IGNORECASE)
 
+    # Match prepositions/articles preceding the date/time entities
+    PREPS = r'\b(?:on|at|by|in|during|for|around|before|after|near|from|to|about|of)\b'
+    ARTICLES = r'\b(?:the|a|an)\b'
+    PREP_OR_ART = rf'(?:{PREPS}\s+)?(?:{ARTICLES}\s+)?'
+
+    # Date and time entities
+    date_time_entities = [
+        # durations: in 5 days, in 2 weeks
+        r'\bin\s+\d+\s+days?\b',
+        r'\bin\s+\d+\s+weeks?\b',
+        
+        # relative next/this date phrases: next Friday, this morning
+        r'\b(?:next|this)\s+(?:week|month|year|morning|afternoon|evening|night|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+        
+        # relative day keywords
+        r'\b(?:today|tomorrow|tonight)\b',
+        
+        # dates with month names: 23rd may, may 23, 23 of june
+        r'\b\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\b',
+        r'\b(?:january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}(?:st|nd|rd|th)?\b',
+        
+        # weekday names
+        r'\b(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b',
+        
+        # time of day keywords
+        r'\b(?:morning|afternoon|evening|night|noon|midnight)\b',
+        
+        # standard times: 6:30, 6:30 pm, 6:30pm
+        r'\b\d{1,2}:\d{2}\s*(?:am|pm)?\b',
+        
+        # relative/am-pm times: 6 pm, 6pm, 10 am
+        r'\b\d{1,2}\s*(?:am|pm)\b',
+        
+        # raw hour numbers preceded by at or by: at 5, by 6
+        r'\b(?:at|by)\s+\d{1,2}\b'
+    ]
+
+    # Combine entities
+    combined_pattern = '|'.join(date_time_entities)
+    
+    # Complete pattern: optionally preceded by prep + article, then the entity
+    strip_pattern = re.compile(rf'(?:{PREP_OR_ART})?(?:{combined_pattern})', re.IGNORECASE)
+
+    # 1 & 2. Remove matched date/time entities and their prep phrases
+    t = re.sub(strip_pattern, '', t)
+
+    # Strip generic action verbs from start of title
     t = re.sub(r'^(remind me to|remind me|please|i need to|i want to|schedule|add|create|set)\s+', '', t, flags=re.IGNORECASE)
+    
+    # Clean up excess spaces
     t = re.sub(r'\s+', ' ', t).strip(" ,.-")
-    return t.capitalize() if t else ""
+
+    # 3 & 4. Final title sanitizer and validation
+    return sanitize_task_title(t)
 
 
 
@@ -263,8 +325,8 @@ def _local_parse(text: str, now: datetime):
     # Time indicators - exclude 'am'/'pm' from simple string check as they are too common in chatter
     simple_indicators = [ti for ti in TIME_INDICATORS if ti not in ["am", "pm"]]
     time_pattern = r'\b(' + '|'.join(re.escape(ti) for ti in simple_indicators) + r')\b'
-    # Also check for specific time patterns like "8am", "8:00", "at 4"
-    has_time = re.search(time_pattern, t_low) or re.search(r'\d{1,2}(?::\d{2})?\s*(am|pm)?', t_low)
+    # Also check for specific time patterns like "8am", "8:00"
+    has_time = re.search(time_pattern, t_low) or re.search(r'\b\d{1,2}:\d{2}\s*(?:am|pm)?\b|\b\d{1,2}\s*(?:am|pm)\b', t_low)
 
     # Priority check
     has_prio = any(w in t_low for w in ["high", "medium", "low", "urgent", "asap", "important"])
@@ -411,9 +473,11 @@ def handle_user_input(text: str, client_time: str = None, _history_ext=None, _dr
         task_draft["category"] = parsed["category"]
 
     # --- CONVERSATIONAL / SMALL TALK HANDLER ---
-    if not parsed and not task_draft.get("title"):
-        # The user requested that out-of-context text uses the standard theme message
-        return {"type": "chat", "response": OFF_TRACK_MSG, "task": task_draft.copy()}
+    if not parsed and not (task_draft.get("title") and t in CONFIRM_WORDS):
+        # Clear draft if the message is out of context/chatter and not confirming
+        cleared = {"title": "", "date": "", "time": "", "priority": "Medium", "category": "General"}
+        if _draft_ext is None: current_task = cleared
+        return {"type": "chat", "response": OFF_TRACK_MSG, "task": cleared}
 
     # --- GEMINI ENHANCEMENT ---
     if task_draft.get("title") and (not task_draft.get("date") or not task_draft.get("time")):
