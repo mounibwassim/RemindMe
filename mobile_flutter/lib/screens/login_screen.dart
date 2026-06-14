@@ -543,6 +543,7 @@ class _ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
   final _username = TextEditingController();
+  final _otpController = TextEditingController();
   bool _sent = false;
   bool _completed = false;
 
@@ -559,6 +560,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
   @override
   void dispose() {
     _username.dispose();
+    _otpController.dispose();
     super.dispose();
   }
 
@@ -673,7 +675,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                             ),
                           ],
                         ),
-                      ).animate().shake(),
+                      ),
                       const SizedBox(height: 16),
                     ],
                     TextFormField(
@@ -701,48 +703,38 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                           : const Text('Send Recovery Code'),
                     ),
                   ] else ...[
+                    // Show success banner then OTP+new password form inline
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(14),
+                      margin: const EdgeInsets.only(bottom: 20),
                       decoration: BoxDecoration(
-                        color: colors.primaryContainer.withValues(alpha: 0.3),
-                        borderRadius: BorderRadius.circular(16),
+                        color: colors.primaryContainer.withValues(alpha: 0.25),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: colors.primary.withValues(alpha: 0.3)),
                       ),
-                      child: Column(
+                      child: Row(
                         children: [
                           Icon(Icons.mark_email_read_outlined,
-                              size: 48, color: colors.primary),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Check Your Inbox',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 18,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            state.successMessage ??
-                                'A password reset link has been sent to your registered email address.\n\nClick the link in the email to set a new password, then come back and sign in.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(color: colors.onSurfaceVariant),
-                          ),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Check your spam/junk folder if you don\'t see it within a few minutes.',
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: colors.onSurfaceVariant,
-                              fontSize: 12,
-                              fontStyle: FontStyle.italic,
+                              color: colors.primary, size: 20),
+                          const SizedBox(width: 10),
+                          const Expanded(
+                            child: Text(
+                              'Recovery code sent! Check your inbox and spam folder.',
+                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Back to Login'),
+                    _ResetPasswordScreen(
+                      email: _username.text.trim(),
+                      onSuccess: () => setState(() => _completed = true),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () => setState(() => _sent = false),
+                      child: const Text('Resend Code'),
                     ),
                   ],
                 ],
@@ -912,8 +904,9 @@ class _ParticlePainter extends CustomPainter {
 }
 
 class _ResetPasswordScreen extends StatefulWidget {
-  const _ResetPasswordScreen({required this.email});
+  const _ResetPasswordScreen({required this.email, this.onSuccess});
   final String email;
+  final VoidCallback? onSuccess;
 
   @override
   State<_ResetPasswordScreen> createState() => _ResetPasswordScreenState();
@@ -972,7 +965,11 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
             backgroundColor: Colors.green,
           ),
         );
-        Navigator.popUntil(context, (route) => route.isFirst);
+        if (widget.onSuccess != null) {
+          widget.onSuccess!();
+        } else {
+          Navigator.popUntil(context, (route) => route.isFirst);
+        }
       }
     } catch (e) {
       if (mounted) {

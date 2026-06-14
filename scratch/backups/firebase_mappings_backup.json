@@ -1,0 +1,83 @@
+{
+  "abdelkarim": {
+    "email": "svmeftahabdelkrim@gmail.com",
+    "metadata": {
+      "passphrase_uid": "c8598a1f-5329-44b4-b8da-abbabc42f11e",
+      "salt_hex": "c2f68206d254cbe0c1d4bf07444567eb"
+    },
+    "uid": "c8598a1f-5329-44b4-b8da-abbabc42f11e"
+  },
+  "mounib": {
+    "avatar_emoji": "\ud83d\udc8e",
+    "email": "mounibwassimm@gmail.com",
+    "metadata": {
+      "passphrase_uid": "115ae207-f59c-47f1-a299-d9aa865a5e9b",
+      "salt_hex": "f8de79db7e4f9658e083e03436058382",
+      "supabase_uid": "115ae207-f59c-47f1-a299-d9aa865a5e9b"
+    },
+    "uid": "legacy_mounib"
+  },
+  "test_user": {
+    "email": "test_new@example.com",
+    "uid": "oWtcCIQiTFbLMBdDvRI9AG7lkpO2"
+  },
+  "testrec_1781434747": {
+    "email": "testrec_1781434747@gmail.com",
+    "metadata": {
+      "salt_hex": "0f15354a6f1a1d961917a04681838774"
+    },
+    "uid": "866c2aa9-6e04-4a71-b522-8a22673040fa"
+  },
+  "testrec_1781434792": {
+    "email": "testrec_1781434792@gmail.com",
+    "metadata": {
+      "salt_hex": "244bb756950335d94cff9a6bd352a0fe"
+    },
+    "uid": "7872752c-5094-4ad7-8190-06ac7001f2c9"
+  },
+  "testrec_1781435249": {
+    "email": "testrec_1781435249@gmail.com",
+    "metadata": {
+      "salt_hex": "9b726fb2ff8f66b3bc3943195e3d883a"
+    },
+    "uid": "1f5d5c2c-2a15-42b7-8e38-0d947bad3a79"
+  },
+  "testrec_1781436542": {
+    "email": "testrec_1781436542@gmail.com",
+    "metadata": {
+      "salt_hex": "aeea169c2d4b4cbef66578d0d07eac3f"
+    },
+    "uid": "3e410f13-8e0d-4ebc-8df2-7e0ef65f9ed0"
+  },
+  "testrec_1781437026": {
+    "email": "testrec_1781437026@gmail.com",
+    "metadata": {
+      "salt_hex": "d198137afb8b727093096e3b39b2f2b6"
+    },
+    "uid": "4be27b9e-8735-4f18-ae19-8fc6a8e1cd29"
+  },
+  "testrec_1781440018": {
+    "email": "testrec_1781440018@gmail.com",
+    "metadata": {
+      "salt_hex": "12a241bfe502b91e18ffa0401084cfa9"
+    },
+    "uid": "cccb43ab-2c28-4f62-94a5-5d9a8b5c5487"
+  },
+  "testuser": {
+    "email": "testuser_12345@gmail.com",
+    "uid": "b5259fd2-0776-457f-ae4b-b865695feb52"
+  },
+  "testuser99": {
+    "email": "testuser_99@gmail.com",
+    "uid": "93bee3f4-db2f-4331-b163-5b81488dd302"
+  },
+  "wassim": {
+    "email": "1231302326@student.mmu.edu.my",
+    "metadata": {
+      "passphrase_uid": "525c9a35-ca6d-415d-a6fd-ed48ae8b1cc2",
+      "salt_hex": "3da3158ea58c1cee25bb89ee30583662",
+      "supabase_uid": "75914db8-c4ce-50a3-b20a-53f14e6b1306"
+    },
+    "uid": "525c9a35-ca6d-415d-a6fd-ed48ae8b1cc2"
+  }
+}

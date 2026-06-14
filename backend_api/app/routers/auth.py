@@ -36,15 +36,18 @@ from app.services.session_store import create_dev_session, update_avatar, UserSe
 from backend.firebase_service import (
     sign_in_with_email_password,
     sign_up_with_email_password,
-    reset_password_email,
     update_password,
     get_user_data,
-    confirm_password_reset,
     resend_verification_email,
     save_username_mapping,
     get_username_data,
     get_username_by_email,
     update_profile,
+)
+# Use Supabase OTP flow for forgot-password (6-digit code via email service)
+from backend.supabase_auth import (
+    reset_password_email,
+    confirm_password_reset,
 )
 
 router = APIRouter()
@@ -247,8 +250,8 @@ import time
 @router.post("/firebase/forgot-password")
 def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     """
-    Send password reset email via Firebase REST API.
-    Firebase sends the email from their own servers — no SMTP required.
+    Send password reset using a 6-digit OTP delivered via the HTTP email service (Resend/Brevo).
+    The user receives the OTP code in their email and enters it in the app to reset their password.
     """
     client_ip = request.client.host if request.client else "unknown"
     check_rate_limit(f"forgot_password_{client_ip}", max_requests=3, window_minutes=15)
@@ -269,27 +272,27 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
         email = user_data.get("email")
         auth_logger.info(f"[Forgot Password] Resolved username '{payload.username}' -> email: {email}")
     
-    auth_logger.info(f"[Forgot Password] Triggering Firebase recovery email for: {email}")
+    auth_logger.info(f"[Forgot Password] Generating 6-digit OTP and sending via email service to: {email}")
     data, error = reset_password_email(email)
     
     if error:
-        auth_logger.error(f"[Forgot Password] Firebase recovery email failed: {error}")
+        auth_logger.error(f"[Forgot Password] OTP email delivery failed: {error}")
         detail = f"Failed to send recovery email: {error}"
-        if "EMAIL_NOT_FOUND" in error or "user not found" in error.lower():
+        if "not registered" in str(error).lower() or "not found" in str(error).lower():
             detail = "This email/username is not registered."
         raise HTTPException(
             status_code=400,
             detail=detail
         )
     
-    auth_logger.info(f"[Forgot Password] Firebase recovery email triggered successfully for {email}")
-    return {"message": "A password reset link has been sent to your registered email address. Click the link in the email to set a new password, then come back and sign in."}
+    auth_logger.info(f"[Forgot Password] 6-digit OTP sent successfully to {email}")
+    return {"message": "A 6-digit recovery code has been sent to your registered email address. Enter the code in the app to reset your password."}
 
 
 
 @router.post("/firebase/confirm-password-reset", response_model=MessageResponse)
 def firebase_confirm_password_reset(payload: ConfirmPasswordResetRequest, request: Request):
-    """Confirm Firebase password reset with the token from the reset email."""
+    """Confirm password reset using the 6-digit OTP code and set a new password via Supabase admin."""
     client_ip = request.client.host if request.client else "unknown"
     check_rate_limit(f"confirm_reset_{client_ip}", max_requests=5, window_minutes=15)
     
@@ -301,12 +304,12 @@ def firebase_confirm_password_reset(payload: ConfirmPasswordResetRequest, reques
             raise HTTPException(status_code=400, detail="Username not found.")
         email = user_data.get("email")
 
-    data, error = confirm_password_reset(payload.reset_code, payload.new_password)
+    data, error = confirm_password_reset(payload.reset_code, payload.new_password, email=email)
     if error:
         detail = f"Reset failed: {error}"
-        if "Invalid or expired reset token" in str(error):
-            detail = "Invalid or expired reset token."
-        elif "WEAK_PASSWORD" in str(error):
+        if "expired" in str(error).lower() or "invalid" in str(error).lower():
+            detail = "Invalid or expired recovery code. Please request a new one."
+        elif "weak" in str(error).lower() or "8 character" in str(error).lower():
             detail = "Password must be at least 8 characters."
         raise HTTPException(status_code=400, detail=detail)
     return MessageResponse(
