@@ -8,7 +8,46 @@ from app.services.task_service import create_task_for_session
 _drafts: dict[str, dict] = {}
 
 
+def _save_message(user_id: str, role: str, content: str):
+    from backend.supabase_auth import supabase_admin
+    import logging
+    logger = logging.getLogger("backend_api")
+    if not supabase_admin or not user_id:
+        return
+    try:
+        data = {
+            "user_id": user_id,
+            "role": role,
+            "content": content
+        }
+        supabase_admin.table("messages").insert(data).execute()
+    except Exception as e:
+        logger.warning("[Assistant Service] Failed to save message to database: %s", e)
+
+
+def get_chat_history_for_session(session: UserSession) -> list[dict]:
+    from backend.supabase_auth import supabase_admin
+    import logging
+    logger = logging.getLogger("backend_api")
+    if not supabase_admin or not session.uid:
+        return []
+    try:
+        res = supabase_admin.table("messages")\
+            .select("role, content, created_at")\
+            .eq("user_id", session.uid)\
+            .order("created_at", desc=False)\
+            .execute()
+        return res.data or []
+    except Exception as e:
+        logger.warning("[Assistant Service] Failed to retrieve chat history: %s", e)
+        return []
+
+
 def handle_assistant_message(session: UserSession, message: str, client_time: str = None) -> AssistantResponse:
+    # 1. Save user message to database
+    if message and session.uid:
+        _save_message(session.uid, "user", message)
+
     draft = _drafts.get(session.session_id)
     draft_copy = draft.copy() if isinstance(draft, dict) else None
     result = handle_user_input(message, client_time=client_time, _draft_ext=draft_copy)
@@ -47,6 +86,11 @@ def handle_assistant_message(session: UserSession, message: str, client_time: st
             res_text = f"Failed to save task to database: {e}"
 
     _drafts[session.session_id] = res_task
+
+    # 2. Save assistant response to database
+    if res_text and session.uid:
+        _save_message(session.uid, "assistant", res_text)
+
     return AssistantResponse(
         type=res_type,
         response=res_text,
@@ -57,4 +101,5 @@ def handle_assistant_message(session: UserSession, message: str, client_time: st
 def reset_assistant_session(session: UserSession):
     _drafts.pop(session.session_id, None)
     reset_task_state()
+
 

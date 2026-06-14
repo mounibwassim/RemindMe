@@ -273,6 +273,12 @@ class ApiClient {
     return AssistantReply.fromJson(_decode(response));
   }
 
+  Future<List<Map<String, dynamic>>> getAssistantChatHistory() async {
+    final response = await _get('/api/v1/assistant/history');
+    final data = _decode(response) as List<dynamic>;
+    return data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
   Future<void> resetAssistantState() async {
     final response = await _post('/api/v1/assistant/reset');
     _decode(response);

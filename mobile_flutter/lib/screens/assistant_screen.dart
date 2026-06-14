@@ -27,13 +27,38 @@ class _AssistantScreenState extends State<AssistantScreen> {
   AssistantReply? _pendingTaskReply;
   bool _sending = false;
 
+  bool _loadingHistory = true;
+
   @override
   void initState() {
     super.initState();
-    // Clear any previous backend state when entering the screen for a fresh start
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<AppState>().resetAssistantState();
-    });
+    _loadChatHistory();
+  }
+
+  Future<void> _loadChatHistory() async {
+    final state = context.read<AppState>();
+    try {
+      final history = await state.api.getAssistantChatHistory();
+      if (!mounted) return;
+      setState(() {
+        if (history.isNotEmpty) {
+          _messages.clear();
+          for (final msg in history) {
+            _messages.add(_ChatBubble(
+              isUser: msg['role'] == 'user',
+              text: msg['content'] ?? '',
+            ));
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Failed to load chat history: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _loadingHistory = false);
+        _scrollToBottom();
+      }
+    }
   }
 
   @override

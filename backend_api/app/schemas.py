@@ -182,3 +182,10 @@ class VerifyOtpRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     reset_token: str = Field(min_length=1)
     new_password: str = Field(min_length=8, max_length=255)
+
+
+class ChatMessageResponse(BaseModel):
+    role: str
+    content: str
+    created_at: str
+
