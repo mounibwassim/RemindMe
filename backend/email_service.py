@@ -7,10 +7,11 @@ def send_email(to_email, subject, body):
     Sends an email using the most reliable HTTPS API method available:
     1. Brevo HTTP API (if BREVO_API_KEY is configured)
     2. Resend HTTP API (if RESEND_API_KEY is configured)
-    3. FormSubmit keyless HTTP API (fallback if no keys are configured)
+    3. FormSubmit keyless HTTP API (fallback)
     Returns: (bool success, str error_message)
     """
     logging.info(f"[Forgot Password] [Email Service] Attempting to send email to {to_email}...")
+    errors = []
 
     # 1. Try Brevo HTTP API
     if BREVO_API_KEY:
@@ -32,10 +33,10 @@ def send_email(to_email, subject, body):
             if r.status_code in [200, 201, 202]:
                 logging.info(f"[Forgot Password] [Email Service] Email sent successfully via Brevo to {to_email}")
                 return True, None
-            return False, f"Brevo returned error status {r.status_code}: {r.text}"
+            errors.append(f"Brevo returned error status {r.status_code}: {r.text}")
         except Exception as e:
             logging.error(f"[Forgot Password] [Email Service] Brevo API request failed: {e}")
-            return False, f"Brevo request failed: {e}"
+            errors.append(f"Brevo request failed: {e}")
 
     # 2. Try Resend HTTP API
     if RESEND_API_KEY:
@@ -58,13 +59,13 @@ def send_email(to_email, subject, body):
             if r.status_code in [200, 201, 202]:
                 logging.info(f"[Forgot Password] [Email Service] Email sent successfully via Resend to {to_email}")
                 return True, None
-            return False, f"Resend returned error status {r.status_code}: {r.text}"
+            errors.append(f"Resend returned error status {r.status_code}: {r.text}")
         except Exception as e:
             logging.error(f"[Forgot Password] [Email Service] Resend API request failed: {e}")
-            return False, f"Resend request failed: {e}"
+            errors.append(f"Resend request failed: {e}")
 
     # 3. Fallback: FormSubmit Keyless HTTP API (uses HTTPS port 443, not blocked by Render)
-    logging.info("[Forgot Password] [Email Service] No API keys (Brevo/Resend) configured. Trying FormSubmit keyless fallback...")
+    logging.info(f"[Forgot Password] [Email Service] Trying FormSubmit keyless fallback for {to_email}...")
     url = f"https://formsubmit.co/ajax/{to_email}"
     headers = {
         "User-Agent": "Mozilla/5.0",
@@ -85,11 +86,16 @@ def send_email(to_email, subject, body):
             elif "Activation" in res_data.get("message", ""):
                 logging.warning(f"[Forgot Password] [Email Service] FormSubmit requires activation for {to_email}. Activation email sent.")
                 return True, "FormSubmit activation email sent. Please click the link inside it to activate recovery delivery."
-            return False, f"FormSubmit failed: {res_data.get('message')}"
-        return False, f"FormSubmit returned HTTP status {r.status_code}"
+            errors.append(f"FormSubmit failed: {res_data.get('message')}")
+        else:
+            errors.append(f"FormSubmit returned HTTP status {r.status_code}")
     except Exception as e:
         logging.error(f"[Forgot Password] [Email Service] FormSubmit request failed: {e}")
-        return False, f"FormSubmit request failed: {e}"
+        errors.append(f"FormSubmit request failed: {e}")
+
+    combined_errors = " | ".join(errors)
+    logging.error(f"[Forgot Password] [Email Service] All email methods failed. Errors: {combined_errors}")
+    return False, combined_errors
 
 def send_recovery_email(to_email, link=None):
     subject = "Password Reset Request"

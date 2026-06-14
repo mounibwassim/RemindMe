@@ -47,8 +47,11 @@ def get_analytics_summary(session: UserSession, period: str = "week") -> Analyti
     upcoming = len(upcoming_tasks)
     missed = len(missed_tasks)
 
-    # Weekly distribution (Last 7 days)
-    weekly = _get_weekly_distribution_in_memory(task_models)
+    # Weekly/Monthly distribution (reusing weekly fields for simplicity in frontend display)
+    if period == "month":
+        weekly = _get_monthly_distribution_in_memory(task_models)
+    else:
+        weekly = _get_weekly_distribution_in_memory(task_models)
 
     # Audit stats (From Supabase logs)
     # We fetch a larger batch to calculate stats (Increased to 1000 to ensure we catch all notifications)
@@ -70,6 +73,7 @@ def get_analytics_summary(session: UserSession, period: str = "week") -> Analyti
 
     task_notified_times = {}
     response_times = []
+    missed_count = 0
 
     # Weekly/Monthly Stats
     today_dt = datetime.now()
@@ -127,17 +131,21 @@ def get_analytics_summary(session: UserSession, period: str = "week") -> Analyti
             audit["notification_scheduled"] += 1
         elif action == "notification_test":
             audit["notification_tests"] += 1
-        elif action == "task_snoozed":
+        elif action in ["task_snoozed", "notification_snoozed_from_notification", "snoozed_from_notification"]:
             audit["snoozed_events"] += 1
         elif action == "task_created":
             audit["created_tasks"] += 1
         elif action == "task_edited":
             audit["edited_tasks"] += 1
-        elif action == "task_completed":
+        elif action in ["task_completed", "notification_completed_from_notification", "completed_from_notification"]:
             audit["completed_tasks"] += 1
+        elif action in ["notification_missed", "reminder_missed", "notification_reminder_missed", "missed"]:
+            missed_count += 1
 
     if response_times:
         audit["avg_response_min"] = round(sum(response_times) / len(response_times), 1)
+
+    audit["missed_tasks"] = missed_count if missed_count > 0 else missed
 
     audit["total_actions"] = (
         audit.get("notifications_sent", 0) + 
@@ -217,17 +225,63 @@ def _get_weekly_distribution_in_memory(tasks: list) -> dict:
     }
 
 
+def _get_monthly_distribution_in_memory(tasks: list) -> dict:
+    today = date.today()
+    # Weeks of the current month
+    labels = ["W1", "W2", "W3", "W4"]
+    counts = [0] * 4
+    
+    # Check if the month has a 5th week (day 29+)
+    year = today.year
+    month = today.month
+    if month == 12:
+        last_day = (date(year + 1, 1, 1) - timedelta(days=1)).day
+    else:
+        last_day = (date(year, month + 1, 1) - timedelta(days=1)).day
+        
+    if last_day > 28:
+        labels.append("W5")
+        counts.append(0)
+        
+    for task in tasks:
+        if task.completed_iso:
+            try:
+                ts = task.completed_iso.split("T")[0].split(" ")[0]
+                comp_dt = date.fromisoformat(ts)
+                if comp_dt.year == year and comp_dt.month == month:
+                    day = comp_dt.day
+                    if day <= 7:
+                        counts[0] += 1
+                    elif day <= 14:
+                        counts[1] += 1
+                    elif day <= 21:
+                        counts[2] += 1
+                    elif day <= 28:
+                        counts[3] += 1
+                    else:
+                        counts[4] += 1
+            except Exception:
+                continue
+                
+    month_name = today.strftime("%B %Y")
+    return {
+        "labels": labels,
+        "counts": counts,
+        "range": f"01 - {last_day:02d} {month_name}"
+    }
+
+
 def get_recent_audit_logs(session: UserSession, period: str = "week", limit: int = 200) -> list[AuditLogResponse]:
-    # ── Auto Cleanup Old Weeks ──────────────────────────────────────
+    # ── Auto Cleanup Old Audit Logs (60 days) ──────────────────────────────────
     try:
         today_dt = datetime.now()
-        monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        monday_utc = monday.astimezone(timezone.utc)
-        monday_utc_iso = monday_utc.isoformat()
+        sixty_days_ago = today_dt - timedelta(days=60)
+        sixty_days_ago_utc = sixty_days_ago.astimezone(timezone.utc)
+        sixty_days_ago_iso = sixty_days_ago_utc.isoformat()
         
         # Delete from Supabase table
-        supabase.supabase.table("audit_logs").delete().eq("user_id", session.uid).lt("created_at", monday_utc_iso).execute()
-        print(f"DEBUG: Cleaned up old audit logs older than {monday_utc_iso}")
+        supabase.supabase.table("audit_logs").delete().eq("user_id", session.uid).lt("created_at", sixty_days_ago_iso).execute()
+        print(f"DEBUG: Cleaned up old audit logs older than {sixty_days_ago_iso}")
     except Exception as e:
         print(f"Error during auto-cleanup of old audit logs: {e}")
 

@@ -290,6 +290,18 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     
     if error:
         auth_logger.error(f"[Forgot Password] Recovery email failed: {error}")
+        
+        # Check for Resend Sandbox / restrictions
+        is_sandbox_error = False
+        lower_err = error.lower()
+        if "403" in lower_err or "sandbox" in lower_err or "validation_error" in lower_err or "own email" in lower_err or "verify a domain" in lower_err:
+            is_sandbox_error = True
+            
+        if is_sandbox_error:
+            auth_logger.warning("[Forgot Password] Sandbox restriction detected. Returning friendly OTP logs message to frontend.")
+            msg = "Email delivery failed due to Resend Sandbox restrictions. If you are testing, you can retrieve the 6-digit recovery code directly from your Render/backend server logs."
+            return {"message": msg}
+            
         raise HTTPException(
             status_code=500,
             detail=f"Failed to send recovery email: {error}"
