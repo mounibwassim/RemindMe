@@ -126,6 +126,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         focusedDay: _focusedDay,
         selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
         calendarFormat: _format,
+        startingDayOfWeek: StartingDayOfWeek.monday,
         eventLoader: (day) => events[DateTime(day.year, day.month, day.day)] ?? [],
         headerStyle: HeaderStyle(
           formatButtonVisible: true,

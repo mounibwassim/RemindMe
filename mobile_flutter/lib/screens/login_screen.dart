@@ -659,46 +659,27 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'If the account exists, a recovery email has been sent. Please check your spam folder if you do not see it within a few minutes.',
+                            'A password reset link has been sent to your registered email address.\n\nClick the link in the email to set a new password, then come back and sign in.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: colors.onSurfaceVariant),
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Check your spam/junk folder if you don\'t see it within a few minutes.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: colors.onSurfaceVariant,
+                              fontSize: 12,
+                              fontStyle: FontStyle.italic,
+                            ),
                           ),
                         ],
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton(
-                            onPressed: () => Navigator.pop(context),
-                            child: const Text('Back to Login'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        OutlinedButton(
-                          onPressed: () {
-                            showModalBottomSheet(
-                              context: context,
-                              isScrollControlled: true,
-                              backgroundColor: Colors.transparent,
-                              builder: (context) => Container(
-                                height:
-                                    MediaQuery.of(context).size.height * 0.85,
-                                decoration: BoxDecoration(
-                                  color: colors.surface,
-                                  borderRadius: const BorderRadius.vertical(
-                                      top: Radius.circular(32)),
-                                ),
-                                child: _ResetPasswordScreen(
-                                    email:
-                                        state.email ?? _username.text.trim()),
-                              ),
-                            );
-                          },
-                          child: const Text('Enter Code'),
-                        ),
-                      ],
+                    FilledButton(
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Back to Login'),
                     ),
                   ],
                 ],

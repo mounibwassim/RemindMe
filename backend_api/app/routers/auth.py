@@ -250,10 +250,11 @@ import time
 @router.post("/firebase/forgot-password")
 def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     """
-    Supabase password recovery flow.
+    Send password reset email via Firebase REST API.
+    Firebase sends the email from their own servers — no SMTP required.
+    Works on Render Free Tier.
     """
     client_ip = request.client.host if request.client else "unknown"
-    # Rate limit: max 3 requests per 15 mins per IP
     check_rate_limit(f"forgot_password_{client_ip}", max_requests=3, window_minutes=15)
     
     auth_logger.info(f"[Forgot Password] Request received for: {payload.username} from IP: {client_ip}")
@@ -262,39 +263,46 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     
     if "@" in payload.username:
         email = payload.username.strip().lower()
-        auth_logger.info(f"[Forgot Password] Input is an email. Checking existence of: {email}")
-        user_res = supabase_admin.auth.admin.list_users()
-        user = next((u for u in user_res if u.email == email), None)
-        if not user:
-            auth_logger.warning(f"[Forgot Password] Email not registered: {email}")
-            raise HTTPException(status_code=400, detail="This email is not registered.")
-        auth_logger.info(f"[Forgot Password] Registered user found for email: {email} (UID: {user.id})")
+        auth_logger.info(f"[Forgot Password] Input is email: {email}")
+        # Verify email exists in Supabase
+        try:
+            user_res = supabase_admin.auth.admin.list_users()
+            user = next((u for u in user_res if u.email == email), None)
+            if not user:
+                auth_logger.warning(f"[Forgot Password] Email not registered: {email}")
+                raise HTTPException(status_code=400, detail="This email is not registered.")
+            auth_logger.info(f"[Forgot Password] Found registered user for: {email}")
+        except HTTPException:
+            raise
+        except Exception as e:
+            auth_logger.error(f"[Forgot Password] Error verifying email: {e}")
+            raise HTTPException(status_code=500, detail="Could not verify email. Please try again.")
     else:
-        auth_logger.info(f"[Forgot Password] Input is a username. Resolving username: {payload.username}")
+        auth_logger.info(f"[Forgot Password] Input is username: {payload.username}")
         user_data, error = get_username_data(payload.username)
         if error or not user_data:
-            auth_logger.warning(f"[Forgot Password] Username not registered: {payload.username}. Error: {error}")
+            auth_logger.warning(f"[Forgot Password] Username not found: {payload.username}. Error: {error}")
             raise HTTPException(status_code=400, detail="This username is not registered.")
         email = user_data.get("email")
-        auth_logger.info(f"[Forgot Password] Mapped username {payload.username} to email: {email}")
+        auth_logger.info(f"[Forgot Password] Resolved username '{payload.username}' -> email: {email}")
     
-    auth_logger.info(f"[Forgot Password] Triggering OTP generation and email send to: {email}")
-    data, error = reset_password_email(email)
+    # Use Firebase REST API to send password reset email.
+    # Firebase handles sending from their own SMTP infrastructure — no port 587 needed.
+    from backend.firebase_service import reset_password_email as firebase_send_reset
+    auth_logger.info(f"[Forgot Password] Sending Firebase password reset email to: {email}")
+    
+    data, error = firebase_send_reset(email)
     
     if error:
-        auth_logger.error(f"[Forgot Password] OTP Generation or system error: {error}")
-        raise HTTPException(status_code=400, detail=f"Failed to generate OTP or send email: {error}")
-        
-    if data and data.get("message") == "OTP_GENERATED_BUT_EMAIL_FAILED":
-        err_msg = data.get("error") or "SMTP connection timeout"
-        auth_logger.error(f"[Forgot Password] OTP generated but email failed to send: {err_msg}")
+        auth_logger.error(f"[Forgot Password] Firebase reset email failed: {error}")
         raise HTTPException(
             status_code=400,
-            detail=f"Failed to send recovery email. SMTP error: {err_msg}. Please verify configuration."
+            detail=f"Failed to send recovery email: {error}"
         )
-        
-    auth_logger.info(f"[Forgot Password] Success! Recovery email successfully sent to {email}")
-    return {"message": "Recovery email sent successfully."}
+    
+    auth_logger.info(f"[Forgot Password] Firebase reset email sent successfully to {email}")
+    return {"message": "Recovery email sent successfully. Please check your inbox and follow the link to reset your password."}
+
 
 
 @router.post("/firebase/confirm-password-reset", response_model=MessageResponse)
