@@ -292,7 +292,7 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     if error:
         auth_logger.error(f"[Forgot Password] OTP email delivery failed: {error}")
         detail = f"Failed to send recovery email: {error}"
-        if "not registered" in str(error).lower() or "not found" in str(error).lower():
+        if error == "This email is not registered.":
             detail = "This email/username is not registered."
         # Include raw_error for client display/debugging
         raise HTTPException(
