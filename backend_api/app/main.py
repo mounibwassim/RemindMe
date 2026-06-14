@@ -46,7 +46,11 @@ app.add_middleware(
 
 @app.get("/health", tags=["system"])
 def health():
-    return {"status": "ok", "service": "remindme-python-api"}
+    return {
+        "status": "ok",
+        "service": "remindme-python-api",
+        "git_commit": os.environ.get("RENDER_GIT_COMMIT", "unknown")
+    }
 
 
 @app.get("/")

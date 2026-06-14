@@ -530,3 +530,148 @@ def reset_password_endpoint(payload: ResetPasswordRequest, request: Request):
         
     return MessageResponse(message="Password reset successfully. You can sign in with your new password.")
 
+
+@router.post("/forgot-password-diagnostics")
+def forgot_password_diagnostics(payload: ForgotPasswordRequest, request: Request):
+    """
+    Temporary diagnostics endpoint to inspect forgot-password verification steps.
+    """
+    from backend.supabase_auth import (
+        url,
+        key,
+        service_role_key,
+        supabase,
+        supabase_admin,
+        _admin_auth_headers,
+        _normalize_admin_users,
+        get_auth_user_by_email
+    )
+    import requests
+
+    client_ip = request.client.host if request.client else "unknown"
+    
+    diagnostics = {
+        "git_commit": os.environ.get("RENDER_GIT_COMMIT", "unknown"),
+        "supabase_url": url,
+        "supabase_key_length": len(key) if key else 0,
+        "supabase_key_preview": f"{key[:10]}...{key[-10:]}" if key and len(key) > 20 else "None",
+        "supabase_service_role_key_length": len(service_role_key) if service_role_key else 0,
+        "supabase_service_role_key_preview": f"{service_role_key[:10]}...{service_role_key[-10:]}" if service_role_key and len(service_role_key) > 20 else "None",
+        "entered_username": payload.username,
+        "mapping_lookup_result": None,
+        "mapping_lookup_error": None,
+        "email_found": None,
+        "user_id_found": None,
+        "admin_api_called": False,
+        "admin_api_status": None,
+        "admin_api_result": None,
+        "admin_api_error": None,
+        "fallback_query_called": False,
+        "fallback_query_result": None,
+        "fallback_query_error": None,
+        "final_reason_for_rejection": None,
+        "reaches_otp_generation": False,
+        "exception_thrown": None,
+    }
+    
+    try:
+        # Step 1: Mapping lookup
+        email = None
+        if "@" in payload.username:
+            email = payload.username.strip().lower()
+            diagnostics["email_found"] = email
+            diagnostics["mapping_lookup_result"] = "Direct email entered"
+        else:
+            user_data, error = get_username_data(payload.username)
+            diagnostics["mapping_lookup_result"] = user_data
+            diagnostics["mapping_lookup_error"] = error
+            if user_data:
+                email = user_data.get("email")
+                diagnostics["email_found"] = email
+                diagnostics["user_id_found"] = user_data.get("uid")
+                
+        if not email:
+            diagnostics["final_reason_for_rejection"] = "Username mapping not found / no email"
+            return diagnostics
+            
+        # Step 2: Supabase Auth Lookup (simulate get_auth_user_by_email with details)
+        email_clean = email.strip().lower()
+        user_obj = None
+        lookup_error = None
+        
+        try:
+            admin_users_endpoint = f"{url.rstrip('/')}/auth/v1/admin/users"
+            diagnostics["admin_api_called"] = True
+            headers = {
+                "Authorization": f"Bearer {service_role_key}",
+                "apikey": service_role_key,
+            }
+            resp = requests.get(
+                admin_users_endpoint,
+                headers=headers,
+                params={"page": 1, "per_page": 1000},
+                timeout=10,
+            )
+            diagnostics["admin_api_status"] = resp.status_code
+            if resp.status_code == 200:
+                normalized = _normalize_admin_users(resp.json())
+                diagnostics["admin_api_result"] = f"Found {len(normalized)} users in Auth list"
+                for u in normalized:
+                    u_email = (u.get("email") or u.get("user", {}).get("email") or "").strip().lower()
+                    if u_email == email_clean:
+                        user_obj = u
+                        break
+            else:
+                diagnostics["admin_api_error"] = f"HTTP {resp.status_code}: {resp.text}"
+        except Exception as ae:
+            diagnostics["admin_api_error"] = str(ae)
+            
+        # Step 3: Try Fallback
+        if not user_obj:
+            diagnostics["fallback_query_called"] = True
+            try:
+                # Query using both clients to compare
+                res_anon = supabase.table("usernames").select("*").eq("email", email_clean).execute()
+                data_anon = getattr(res_anon, 'data', None) or res_anon
+                
+                res_admin = supabase_admin.table("usernames").select("*").eq("email", email_clean).execute()
+                data_admin = getattr(res_admin, 'data', None) or res_admin
+                
+                diagnostics["fallback_query_result"] = {
+                    "anon_client_data": data_anon,
+                    "admin_client_data": data_admin
+                }
+                
+                # Perform the actual logic that the fallback runs
+                if data_anon and isinstance(data_anon, list) and len(data_anon) > 0:
+                    user_data = data_anon[0]
+                    user_obj = {
+                        "id": user_data.get("uid"),
+                        "email": email_clean,
+                        "user_metadata": {
+                            "full_name": user_data.get("username")
+                        }
+                    }
+                else:
+                    lookup_error = "This email is not registered."
+            except Exception as fe:
+                diagnostics["fallback_query_error"] = str(fe)
+                lookup_error = f"Fallback query exception: {fe}"
+                
+        # Final decision
+        if user_obj:
+            diagnostics["reaches_otp_generation"] = True
+            diagnostics["user_obj_resolved"] = {
+                "id": user_obj.get("id") or user_obj.get("uid") or user_obj.get("user", {}).get("id"),
+                "email": user_obj.get("email")
+            }
+        else:
+            diagnostics["final_reason_for_rejection"] = lookup_error or "User not found in Auth or public mapping fallback"
+            
+    except Exception as exc:
+        diagnostics["exception_thrown"] = str(exc)
+        diagnostics["final_reason_for_rejection"] = f"Exception: {exc}"
+        
+    return diagnostics
+
+

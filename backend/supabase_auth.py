@@ -138,8 +138,8 @@ def _normalize_admin_users(payload):
 def _get_auth_user_by_email_fallback(email: str):
     logger.info("[Auth] Attempting mapping table fallback lookup for email: %s", email)
     try:
-        # Query public usernames table which is readable by anon key
-        res = supabase.table("usernames").select("*").eq("email", email).execute()
+        # Query public usernames table using admin client to bypass RLS policies
+        res = supabase_admin.table("usernames").select("*").eq("email", email).execute()
         data = getattr(res, 'data', None) or res
         if data and isinstance(data, list) and len(data) > 0:
             user_data = data[0]
