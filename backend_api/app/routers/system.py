@@ -82,3 +82,20 @@ async def test_smtp_configuration():
         
     return diagnostics
 
+@router.get("/email-diagnostics")
+async def email_diagnostics():
+    from backend.config import BREVO_API_KEY, RESEND_API_KEY
+    import os
+    
+    env_keys = [k for k in os.environ.keys() if "KEY" in k.upper() or "MAIL" in k.upper() or "RESEND" in k.upper() or "BREVO" in k.upper()]
+    
+    return {
+        "resend_key_configured": bool(RESEND_API_KEY),
+        "resend_key_length": len(RESEND_API_KEY) if RESEND_API_KEY else 0,
+        "resend_key_preview": f"{RESEND_API_KEY[:4]}...{RESEND_API_KEY[-3:]}" if RESEND_API_KEY and len(RESEND_API_KEY) > 7 else "none",
+        "brevo_key_configured": bool(BREVO_API_KEY),
+        "brevo_key_length": len(BREVO_API_KEY) if BREVO_API_KEY else 0,
+        "env_keys_found": env_keys
+    }
+
+
