@@ -335,3 +335,25 @@ def update_avatar_in_mapping(username, emoji):
         return r.status_code == 200, None
     except Exception as e:
         return False, str(e)
+
+def resend_verification_email(email):
+    """
+    Resend verification email using Firebase REST API.
+    """
+    key = get_api_key()
+    if not key:
+        return None, "Missing Firebase API Key"
+        
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key={key}"
+    payload = {
+        "requestType": "VERIFY_EMAIL",
+        "email": email
+    }
+    try:
+        r = requests.post(url, json=payload, timeout=10)
+        data = r.json()
+        if "error" in data:
+            return None, data["error"]["message"]
+        return data, None
+    except Exception as e:
+        return None, str(e)
