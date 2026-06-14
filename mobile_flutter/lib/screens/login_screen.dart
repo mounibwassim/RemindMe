@@ -50,6 +50,56 @@ class _LoginScreenState extends State<LoginScreen>
     super.dispose();
   }
 
+  void _showServerConfigDialog(BuildContext context, AppState state) {
+    final controller = TextEditingController(text: state.api.baseUrl);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Configure API Server'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter the backend server URL. E.g., http://10.0.2.2:8000 for Android emulator or http://localhost:8000 for web/desktop.',
+              style: TextStyle(fontSize: 13),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                labelText: 'Server Base URL',
+                hintText: 'http://localhost:8000',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              final url = controller.text.trim();
+              await state.changeApiBaseUrl(url);
+              if (context.mounted) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('API Server updated to: ${state.api.baseUrl}'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -61,6 +111,18 @@ class _LoginScreenState extends State<LoginScreen>
         children: [
           // ── Futuristic Background ─────────────────────────────────
           const _FuturisticBackground(),
+
+          Positioned(
+            top: 16,
+            right: 16,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.dns_outlined, color: Colors.white70),
+                tooltip: 'Configure API Server',
+                onPressed: () => _showServerConfigDialog(context, state),
+              ),
+            ),
+          ),
 
           SafeArea(
             child: Center(
@@ -659,7 +721,8 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'A 6-digit recovery code has been sent to your registered email address.\n\nEnter the code below to set a new password.',
+                            state.successMessage ??
+                                'A 6-digit recovery code has been sent to your registered email address.\n\nEnter the code below to set a new password.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: colors.onSurfaceVariant),
                           ),
@@ -937,6 +1000,7 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
             backgroundColor: Colors.green,
           ),
         );
+        Navigator.popUntil(context, (route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
@@ -968,7 +1032,6 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
         setState(() {
           _isSubmitting = false;
         });
-        Navigator.popUntil(context, (route) => route.isFirst);
       }
     }
   }
@@ -1070,7 +1133,7 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
             width: double.infinity,
             child: FilledButton(
               onPressed: (!_isValid || state.isLoading) ? null : _handleReset,
-              child: state.isLoading
+              child: (state.isLoading || _isSubmitting)
                   ? const SizedBox(
                       width: 20,
                       height: 20,

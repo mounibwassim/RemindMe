@@ -111,62 +111,65 @@ from backend.email_service import send_email
 from backend.otp_store import generate_and_store_otp, verify_and_consume_otp
 
 def reset_password_email(email, platform='web'):
-    logger.debug("Triggering recovery for %s (Platform: %s)", email, platform)
+    logger.info("[Forgot Password] OTP generation initiated for email: %s", email)
     try:
         otp = generate_and_store_otp(email, expiry_minutes=15)
-        logger.info(f"Recovery token generated successfully for {email}")
+        logger.info("[Forgot Password] Secure 6-digit OTP code generated successfully for %s", email)
         
-        # SEND REAL EMAIL using the credentials in backend/config.py
+        # DEVELOPER ALERT: Always print the generated OTP to the server logs
+        logger.critical(f"[Forgot Password] DEVELOPER ALERT: OTP for {email} is: {otp}")
+        print(f"[Forgot Password] DEVELOPER ALERT: OTP for {email} is: {otp}")
+        
         subject = "RemindMe - Your Recovery Code"
         body = f"Hello,\n\nYour 6-digit recovery code is: {otp}\n\nThis code will expire in 15 minutes.\n\nEnter this in the app to reset your password."
         
+        logger.info("[Forgot Password] Attempting OTP delivery via HTTP API service to %s...", email)
         success, error = send_email(email, subject, body)
         
         if success:
-            logger.info("Real recovery email sent to %s", email)
-            return {"message": "OTP_SENT_TO_EMAIL", "email": email}, None
+            logger.info("[Forgot Password] OTP email delivered successfully via HTTP API to %s", email)
+            return {"message": "OTP_SENT_TO_EMAIL", "email": email, "info": error}, None
         else:
-            logger.error("Failed to send native SMTP email: %s. Trying Supabase OTP fallback...", error)
-            try:
-                # Call Supabase sign_in_with_otp to send a 6-digit OTP code via Supabase's mailer
-                res = supabase.auth.sign_in_with_otp({
-                    "email": email,
-                    "options": {
-                        "should_create_user": False
-                    }
-                })
-                logger.info("Supabase OTP fallback successful for %s", email)
-                return {"message": "OTP_SENT_VIA_SUPABASE", "email": email}, None
-            except Exception as se:
-                logger.error("Supabase OTP fallback failed: %s", se)
-                return None, f"Failed to send email. SMTP error: {error}. Supabase error: {str(se)}"
+            logger.error("[Forgot Password] HTTP API email delivery failed: %s", error)
+            return None, f"Email delivery failed: {error}"
             
     except Exception as e:
+        logger.error("[Forgot Password] Exception during OTP generation/delivery for %s: %s", email, e)
         traceback.print_exc()
         return None, str(e)
 
+
+
 def confirm_password_reset(otp_code, new_password, email=None):
+    logger.info("[Forgot Password] OTP verification initiated for %s with code: %s", email, otp_code)
     try:
         if not email:
+            logger.error("[Forgot Password] Verification failed: Email is missing.")
             return None, "Email is required to confirm password reset in Supabase."
             
-        logger.error(f"DEBUG: confirm_password_reset called with email={email}, otp={otp_code}")
-        
         # Check local secure OTP first
+        logger.info("[Forgot Password] Checking local SQLite database for OTP verification...")
         if verify_and_consume_otp(email, otp_code):
-            logger.info("Local OTP verified for %s. Resetting password via admin API.", email)
+            logger.info("[Forgot Password] Local SQLite OTP verified successfully for %s. Resetting password...", email)
             # Find the user ID for this email
             user_res = supabase_admin.auth.admin.list_users()
             user = next((u for u in user_res if u.email == email), None)
             if not user:
+                logger.error("[Forgot Password] Local reset failed: User %s not found in Supabase Auth records.", email)
                 return None, "User not found in Supabase."
             
             # Reset password directly via admin API
-            response = supabase_admin.auth.admin.update_user_by_id(user.id, {"password": new_password})
-            return response, None
+            logger.info("[Forgot Password] Requesting Supabase Admin API password reset for user ID %s (%s)...", user.id, email)
+            try:
+                response = supabase_admin.auth.admin.update_user_by_id(user.id, {"password": new_password})
+                logger.info("[Forgot Password] Supabase Admin API password updated successfully for %s.", email)
+                return response, None
+            except Exception as pe:
+                logger.error("[Forgot Password] Supabase Admin API password update failed for %s: %s", email, pe)
+                return None, str(pe)
 
         # Fallback to verifying Supabase OTP
-        logger.info("Local OTP verification failed or not found. Attempting Supabase OTP verification for %s...", email)
+        logger.warning("[Forgot Password] Local SQLite OTP check failed/expired for %s. Trying Supabase verify_otp...", email)
         
         verify_res = None
         verify_error = None
@@ -174,7 +177,7 @@ def confirm_password_reset(otp_code, new_password, email=None):
         # Sequentially try different verification types to guarantee compatibility
         for otp_type in ["email", "recovery", "magiclink"]:
             try:
-                logger.info("Attempting Supabase verify_otp with type=%s...", otp_type)
+                logger.info("[Forgot Password] Attempting Supabase verify_otp with type=%s for %s...", otp_type, email)
                 # Initialize a temporary client to avoid polluting the shared client session
                 temp_client = create_client(url, key)
                 verify_res = temp_client.auth.verify_otp({
@@ -183,23 +186,29 @@ def confirm_password_reset(otp_code, new_password, email=None):
                     "type": otp_type
                 })
                 if verify_res and verify_res.user:
-                    logger.info("Supabase verify_otp succeeded with type=%s", otp_type)
+                    logger.info("[Forgot Password] Supabase verify_otp succeeded with type=%s for %s", otp_type, email)
                     break
             except Exception as e:
-                logger.warning("Supabase verify_otp failed with type=%s: %s", otp_type, e)
+                logger.warning("[Forgot Password] Supabase verify_otp failed with type=%s: %s", otp_type, e)
                 verify_error = e
 
         if verify_res and verify_res.user:
             user_id = verify_res.user.id
-            logger.info("Supabase OTP verified. Resetting password for user %s via admin API.", user_id)
-            response = supabase_admin.auth.admin.update_user_by_id(user_id, {"password": new_password})
-            return response, None
+            logger.info("[Forgot Password] Supabase OTP verified. Resetting password for user ID %s (%s) via admin API...", user_id, email)
+            try:
+                response = supabase_admin.auth.admin.update_user_by_id(user_id, {"password": new_password})
+                logger.info("[Forgot Password] Supabase Admin API password updated successfully for %s.", email)
+                return response, None
+            except Exception as pe:
+                logger.error("[Forgot Password] Supabase Admin API password update failed for %s: %s", email, pe)
+                return None, str(pe)
             
+        logger.error("[Forgot Password] All OTP verification methods failed for %s.", email)
         err_detail = str(verify_error) if verify_error else "Invalid or expired recovery code."
         return None, f"Invalid or expired recovery code. Details: {err_detail}"
     except Exception as e:
         import traceback
-        logger.error("OTP Verification failed with exception: %s\n%s", e, traceback.format_exc())
+        logger.error("[Forgot Password] OTP Verification failed with exception: %s\n%s", e, traceback.format_exc())
         return None, str(e)
 
 def update_password(access_token, new_password):

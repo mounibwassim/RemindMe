@@ -291,12 +291,17 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     if error:
         auth_logger.error(f"[Forgot Password] Recovery email failed: {error}")
         raise HTTPException(
-            status_code=400,
+            status_code=500,
             detail=f"Failed to send recovery email: {error}"
         )
     
     auth_logger.info(f"[Forgot Password] Recovery email triggered successfully for {email}")
-    return {"message": "Recovery email sent successfully. Please check your inbox for the 6-digit recovery code."}
+    
+    msg = "Recovery email sent successfully. Please check your inbox for the 6-digit recovery code."
+    if data and data.get("info"):
+        msg = f"Recovery email sent. Note: {data.get('info')}"
+        
+    return {"message": msg}
 
 
 
