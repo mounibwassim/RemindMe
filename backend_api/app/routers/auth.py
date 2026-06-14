@@ -30,6 +30,8 @@ from app.schemas import (
     SessionResponse,
     AuthSessionResponse,
     AvatarUpdateRequest,
+    VerifyOtpRequest,
+    ResetPasswordRequest,
 )
 from app.services.session_store import create_dev_session, update_avatar, UserSession
 # Auth operations now use Supabase admin/client
@@ -401,3 +403,130 @@ def _safe_name(name: str) -> str:
     import re
     cleaned = re.sub(r"[^a-zA-Z0-9_.-]", "_", name.strip().lower())
     return cleaned if cleaned else "user"
+
+
+# ── HMAC-SHA256 Signed Token Helpers for Custom OTP Recovery ────────────────
+
+import hmac
+import hashlib
+import time
+
+SECRET_KEY = os.environ.get("SUPABASE_KEY", "some-fallback-secret-key-12345")
+
+def generate_signed_token(email: str, expires_in: int = 600) -> str:
+    expires_at = int(time.time()) + expires_in
+    message = f"{email}:{expires_at}"
+    signature = hmac.new(SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
+    return f"{message}:{signature}"
+
+def verify_signed_token(token: str) -> str:
+    """Returns the email if verified and not expired, else None."""
+    try:
+        parts = token.split(":")
+        if len(parts) != 3:
+            return None
+        email, expires_at_str, signature = parts
+        expires_at = int(expires_at_str)
+        if time.time() > expires_at:
+            return None
+        message = f"{email}:{expires_at}"
+        expected_sig = hmac.new(SECRET_KEY.encode(), message.encode(), hashlib.sha256).hexdigest()
+        if hmac.compare_digest(signature, expected_sig):
+            return email
+    except Exception:
+        pass
+    return None
+
+
+# ── Custom OTP Endpoints ───────────────────────────────────────────────────
+
+@router.post("/forgot-password")
+def forgot_password_endpoint(payload: ForgotPasswordRequest, request: Request):
+    """
+    Verify user exists, generate custom OTP, save in Supabase, and send it.
+    Exposes OTP in non-production environments for debugging.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    check_rate_limit(f"forgot_password_{client_ip}", max_requests=3, window_minutes=15)
+    
+    auth_logger.info(f"[Custom Forgot Password] Request received for: {payload.username} from IP: {client_ip}")
+    
+    email = None
+    if "@" in payload.username:
+        email = payload.username.strip().lower()
+    else:
+        user_data, error = get_username_data(payload.username)
+        if error or not user_data:
+            raise HTTPException(status_code=400, detail="This username is not registered.")
+        email = user_data.get("email")
+        
+    # Get user object to verify existence in Supabase Auth
+    from backend.supabase_auth import get_auth_user_by_email
+    user_obj, lookup_error = get_auth_user_by_email(email)
+    if lookup_error or not user_obj:
+        raise HTTPException(status_code=400, detail="This email/username is not registered.")
+        
+    data, error = reset_password_email(email)
+    if error:
+        raise HTTPException(status_code=400, detail=f"Failed to initiate password recovery: {error}")
+        
+    return data
+
+
+@router.post("/verify-otp")
+def verify_otp_endpoint(payload: VerifyOtpRequest, request: Request):
+    """
+    Verify custom 6-digit OTP code against Supabase, check expiry, mark as used,
+    and return a signed reset token.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    # Prevent brute-force OTP attempts
+    check_rate_limit(f"verify_otp_{client_ip}", max_requests=5, window_minutes=15)
+    
+    email = None
+    if "@" in payload.email:
+        email = payload.email.strip().lower()
+    else:
+        user_data, error = get_username_data(payload.email)
+        if error or not user_data:
+            raise HTTPException(status_code=400, detail="Username not found.")
+        email = user_data.get("email")
+        
+    from backend.otp_store import verify_and_consume_otp
+    if not verify_and_consume_otp(email, payload.otp_code):
+        raise HTTPException(status_code=400, detail="Invalid or expired recovery code.")
+        
+    # Generate temporary signed reset token valid for 10 minutes (600s)
+    reset_token = generate_signed_token(email, expires_in=600)
+    return {
+        "message": "OTP verified successfully.",
+        "reset_token": reset_token
+    }
+
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password_endpoint(payload: ResetPasswordRequest, request: Request):
+    """
+    Reset user password in Supabase Auth.
+    Only permitted if a valid, unexpired, signed reset_token is provided.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    check_rate_limit(f"reset_password_{client_ip}", max_requests=3, window_minutes=15)
+    
+    email = verify_signed_token(payload.reset_token)
+    if not email:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token. Please verify OTP again.")
+        
+    # Retrieve user UUID in Supabase Auth
+    from backend.supabase_auth import get_auth_user_by_email, _update_password_and_verify_login, _auth_user_id
+    user_obj, lookup_error = get_auth_user_by_email(email)
+    if lookup_error or not user_obj:
+        raise HTTPException(status_code=400, detail="Associated user not found in Supabase Auth records.")
+        
+    user_id = _auth_user_id(user_obj)
+    _, error = _update_password_and_verify_login(email, user_id, payload.new_password)
+    if error:
+        raise HTTPException(status_code=400, detail=f"Failed to reset password: {error}")
+        
+    return MessageResponse(message="Password reset successfully. You can sign in with your new password.")
+

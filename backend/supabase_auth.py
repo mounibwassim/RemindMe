@@ -135,6 +135,26 @@ def _normalize_admin_users(payload):
             return [payload]
     return []
 
+def _get_auth_user_by_email_fallback(email: str):
+    logger.info("[Auth] Attempting mapping table fallback lookup for email: %s", email)
+    try:
+        # Query public usernames table which is readable by anon key
+        res = supabase.table("usernames").select("*").eq("email", email).execute()
+        data = getattr(res, 'data', None) or res
+        if data and isinstance(data, list) and len(data) > 0:
+            user_data = data[0]
+            logger.info("[Auth] Resolved user via public.usernames fallback for %s: UID=%s", email, user_data.get("uid"))
+            return {
+                "id": user_data.get("uid"),
+                "email": email,
+                "user_metadata": {
+                    "full_name": user_data.get("username")
+                }
+            }, None
+    except Exception as fe:
+        logger.error("[Auth] Fallback lookup failed: %s", fe)
+    return None, "This email is not registered."
+
 def get_auth_user_by_email(email):
     email_clean = (email or "").strip().lower()
     if not email_clean:
@@ -150,17 +170,17 @@ def get_auth_user_by_email(email):
         )
         if resp.status_code != 200:
             logger.error("[Auth] Supabase admin user lookup failed (%s): %s", resp.status_code, resp.text)
-            return None, f"User lookup failed: {resp.status_code}"
+            return _get_auth_user_by_email_fallback(email_clean)
 
         for user_obj in _normalize_admin_users(resp.json()):
             u_email = (user_obj.get("email") or user_obj.get("user", {}).get("email") or "").strip().lower()
             if u_email == email_clean:
                 return user_obj, None
 
-        return None, "User not found in Supabase."
+        return _get_auth_user_by_email_fallback(email_clean)
     except Exception as e:
         logger.error("[Auth] Supabase admin user lookup failed for %s: %s", email_clean, e)
-        return None, str(e)
+        return _get_auth_user_by_email_fallback(email_clean)
 
 def _auth_user_id(user_obj):
     if not user_obj:

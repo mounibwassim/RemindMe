@@ -170,3 +170,15 @@ class AuditLogResponse(BaseModel):
     extra: str | None = ""
     notification_scheduled_at: str | None = None
     notification_sent_at: str | None = None
+
+
+# ── Custom OTP password recovery requests ───────────────────────────────────
+
+class VerifyOtpRequest(BaseModel):
+    email: str = Field(min_length=1, max_length=255)
+    otp_code: str = Field(min_length=6, max_length=6)
+
+
+class ResetPasswordRequest(BaseModel):
+    reset_token: str = Field(min_length=1)
+    new_password: str = Field(min_length=8, max_length=255)
