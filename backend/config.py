@@ -33,3 +33,4 @@ SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
 # HTTP Email Services Configuration
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
+SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "mounibwassimm@gmail.com")

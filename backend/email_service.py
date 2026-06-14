@@ -1,6 +1,6 @@
 import logging
 import requests
-from backend.config import BREVO_API_KEY, RESEND_API_KEY
+from backend.config import BREVO_API_KEY, RESEND_API_KEY, SENDER_EMAIL
 
 def send_email(to_email, subject, body):
     """
@@ -22,7 +22,7 @@ def send_email(to_email, subject, body):
             "Content-Type": "application/json"
         }
         payload = {
-            "sender": {"name": "RemindMe", "email": "mounibwassimm@gmail.com"},
+            "sender": {"name": "RemindMe", "email": SENDER_EMAIL},
             "to": [{"email": to_email}],
             "subject": subject,
             "textContent": body
@@ -47,8 +47,14 @@ def send_email(to_email, subject, body):
             "Content-Type": "application/json"
         }
         # Resend's free tier sandbox requires sending from onboarding@resend.dev
+        # If a custom SENDER_EMAIL is defined and is different from the default Gmail,
+        # use it as the "from" address for Resend custom domains.
+        from_address = "RemindMe <onboarding@resend.dev>"
+        if SENDER_EMAIL and SENDER_EMAIL != "mounibwassimm@gmail.com":
+            from_address = f"RemindMe <{SENDER_EMAIL}>"
+
         payload = {
-            "from": "RemindMe <onboarding@resend.dev>",
+            "from": from_address,
             "to": [to_email],
             "subject": subject,
             "text": body
