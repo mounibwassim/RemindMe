@@ -7,7 +7,7 @@ sys.path.insert(0, r'c:\Users\User\Documents\RemindMe')
 
 from backend.crypto import load_salt_for
 from backend_api.app.services.session_store import DATA_DIR
-from backend.firebase_service import get_username_data, save_username_mapping
+from backend.supabase_auth import get_username_data, save_username_mapping
 
 salt_dir = str(DATA_DIR)
 

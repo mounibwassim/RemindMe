@@ -29,8 +29,12 @@ SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
 SMTP_PORT = int(os.environ.get("SMTP_PORT", 587))
 SMTP_USERNAME = os.environ.get("SMTP_USERNAME")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD")
+SMTP_USER = os.environ.get("SMTP_USER") or SMTP_USERNAME
+SMTP_PASS = os.environ.get("SMTP_PASS") or SMTP_PASSWORD
 
 # HTTP Email Services Configuration
 BREVO_API_KEY = os.environ.get("BREVO_API_KEY")
 RESEND_API_KEY = os.environ.get("RESEND_API_KEY")
 SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "mounibwassimm@gmail.com")
+RESEND_FROM_EMAIL = os.environ.get("RESEND_FROM_EMAIL")
+RESEND_TEST_OWNER_EMAIL = os.environ.get("RESEND_TEST_OWNER_EMAIL") or SENDER_EMAIL

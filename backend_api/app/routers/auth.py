@@ -30,15 +30,19 @@ from app.schemas import (
     SessionResponse,
     AuthSessionResponse,
     AvatarUpdateRequest,
-    ForgotPasswordRequest, 
 )
 from app.services.session_store import create_dev_session, update_avatar, UserSession
-from backend.firebase_service import (
+# Auth operations now use Supabase admin/client
+from backend.supabase_auth import (
     sign_in_with_email_password,
     sign_up_with_email_password,
     update_password,
     get_user_data,
     resend_verification_email,
+)
+
+# Use Supabase-backed username mapping helpers (replace Firebase RTDB)
+from backend.supabase_auth import (
     save_username_mapping,
     get_username_data,
     get_username_by_email,
@@ -99,7 +103,7 @@ def firebase_signup(payload: RegisterRequest):
         salt = gen_salt()
         save_salt_for(safe_username, salt, path=str(DATA_DIR))
     
-    save_username_mapping(safe_username, payload.email, uid, metadata={"salt_hex": salt.hex()})
+    save_username_mapping(safe_username, payload.email, uid, metadata={"salt_hex": salt.hex(), "passphrase_uid": uid})
 
     session = create_dev_session(
         username=safe_username,
@@ -130,6 +134,7 @@ def firebase_signin(payload: LoginRequest, request: Request):
     if "@" in payload.username:
         email = payload.username.strip().lower()
         display_name_hint = email.split("@", 1)[0]
+        user_data = None
         print(f"DEBUG: Direct email login detected: {email}")
     else:
         print(f"DEBUG: Username lookup required for: {payload.username}")
@@ -163,7 +168,8 @@ def firebase_signin(payload: LoginRequest, request: Request):
             # Pass through the error if it's something else
             detail = f"Login failed: {error}"
         
-        raise HTTPException(status_code=401, detail=detail)
+        # Include raw error for debugging/display on client when needed
+        raise HTTPException(status_code=401, detail={"message": detail, "raw_error": str(error)})
 
     uid = data.get("localId")
     id_token = data.get("idToken")
@@ -173,6 +179,12 @@ def firebase_signin(payload: LoginRequest, request: Request):
     # This prevents "Data Gone" issue when display_name changes or email login is used
     mapped_username = get_username_by_email(email)
     print(f"DEBUG: Reverse lookup for {email} returned: {mapped_username}")
+    if mapped_username:
+        mapped_user_data, mapped_error = get_username_data(mapped_username)
+        if mapped_user_data:
+            user_data = mapped_user_data
+        elif mapped_error:
+            print(f"DEBUG: Reverse mapping data lookup failed for {mapped_username}: {mapped_error}")
     
     user_info = get_user_data(id_token)
     display_name = (
@@ -274,19 +286,21 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     
     auth_logger.info(f"[Forgot Password] Generating 6-digit OTP and sending via email service to: {email}")
     data, error = reset_password_email(email)
-    
+
     if error:
         auth_logger.error(f"[Forgot Password] OTP email delivery failed: {error}")
         detail = f"Failed to send recovery email: {error}"
         if "not registered" in str(error).lower() or "not found" in str(error).lower():
             detail = "This email/username is not registered."
+        # Include raw_error for client display/debugging
         raise HTTPException(
             status_code=400,
-            detail=detail
+            detail={"message": detail, "raw_error": str(error)}
         )
-    
+
     auth_logger.info(f"[Forgot Password] 6-digit OTP sent successfully to {email}")
-    return {"message": "A 6-digit recovery code has been sent to your registered email address. Enter the code in the app to reset your password."}
+    # Return any info from reset_password_email (may include developer_otp in dev)
+    return data
 
 
 
@@ -296,10 +310,14 @@ def firebase_confirm_password_reset(payload: ConfirmPasswordResetRequest, reques
     client_ip = request.client.host if request.client else "unknown"
     check_rate_limit(f"confirm_reset_{client_ip}", max_requests=5, window_minutes=15)
     
-    if "@" in payload.email:
-        email = payload.email.strip().lower()
+    reset_identity = (payload.email or "").strip()
+    if not reset_identity:
+        raise HTTPException(status_code=400, detail="Email or username is required.")
+
+    if "@" in reset_identity:
+        email = reset_identity.lower()
     else:
-        user_data, error = get_username_data(payload.email)
+        user_data, error = get_username_data(reset_identity)
         if error or not user_data:
             raise HTTPException(status_code=400, detail="Username not found.")
         email = user_data.get("email")
@@ -311,7 +329,7 @@ def firebase_confirm_password_reset(payload: ConfirmPasswordResetRequest, reques
             detail = "Invalid or expired recovery code. Please request a new one."
         elif "weak" in str(error).lower() or "8 character" in str(error).lower():
             detail = "Password must be at least 8 characters."
-        raise HTTPException(status_code=400, detail=detail)
+        raise HTTPException(status_code=400, detail={"message": detail, "raw_error": str(error)})
     return MessageResponse(
         message="Password reset successfully. You can sign in with your new password."
     )
@@ -367,8 +385,8 @@ def patch_avatar(
     session: UserSession = Depends(get_session),
 ):
     """Update user's avatar emoji and persist it."""
-    from backend.firebase_service import update_avatar_in_mapping
-    
+    from backend.supabase_auth import update_avatar_in_mapping
+
     success = update_avatar(session.session_id, payload.avatar_emoji)
     if not success:
         raise HTTPException(status_code=500, detail="Failed to update session avatar.")

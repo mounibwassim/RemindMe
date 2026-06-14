@@ -392,7 +392,7 @@ class AppState extends ChangeNotifier {
       try {
         final res = await api.login(emailInput, password);
         session = res['session_id'];
-        firebaseUid = res['user_uid'];
+        firebaseUid = res['uid'] ?? res['user_uid'];
         displayName = res['display_name'];
         email = res['email'];
         username = res['username'];
@@ -401,6 +401,9 @@ class AppState extends ChangeNotifier {
         await _saveSession();
         await refreshAll();
       } catch (e) {
+        if (e is ApiException) {
+          throw ApiException('Login failed: ${e.message}');
+        }
         throw ApiException('Login failed');
       }
     });
@@ -433,7 +436,7 @@ class AppState extends ChangeNotifier {
     await _guard(() async {
       final res = await api.register(emailInput, password, name);
       session = res['session_id'];
-      firebaseUid = res['user_uid'];
+      firebaseUid = res['uid'] ?? res['user_uid'];
       displayName = res['display_name'];
       email = res['email'];
       username = res['username'];

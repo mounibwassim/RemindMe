@@ -339,6 +339,9 @@ class ApiClient {
     final body = response.body.isEmpty ? null : jsonDecode(response.body);
     if (response.statusCode < 200 || response.statusCode >= 300) {
       final detail = body is Map<String, dynamic> ? body['detail'] : null;
+      if (detail is Map<String, dynamic> && detail['message'] != null) {
+        throw ApiException(detail['message'].toString());
+      }
       throw ApiException(detail?.toString() ?? 'Request failed');
     }
     return body;

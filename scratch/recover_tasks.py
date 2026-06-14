@@ -8,7 +8,7 @@ sys.path.insert(0, r'c:\Users\User\Documents\RemindMe')
 
 from backend.crypto import derive_key, decrypt_bytes, load_salt_for
 from backend_api.app.services.session_store import DATA_DIR
-from backend.firebase_service import save_username_mapping, get_username_data
+from backend.supabase_auth import save_username_mapping, get_username_data
 
 SEP = "=" * 60
 
