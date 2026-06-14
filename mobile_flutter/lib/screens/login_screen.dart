@@ -659,7 +659,7 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                           ),
                           const SizedBox(height: 8),
                           Text(
-                            'A password reset link has been sent to your registered email address.\n\nClick the link in the email to set a new password, then come back and sign in.',
+                            'A 6-digit recovery code has been sent to your registered email address.\n\nEnter the code below to set a new password.',
                             textAlign: TextAlign.center,
                             style: TextStyle(color: colors.onSurfaceVariant),
                           ),
@@ -677,9 +677,37 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Back to Login'),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Back to Login'),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        OutlinedButton(
+                          onPressed: () {
+                            showModalBottomSheet(
+                              context: context,
+                              isScrollControlled: true,
+                              backgroundColor: Colors.transparent,
+                              builder: (context) => Container(
+                                height:
+                                    MediaQuery.of(context).size.height * 0.85,
+                                decoration: BoxDecoration(
+                                  color: colors.surface,
+                                  borderRadius: const BorderRadius.vertical(
+                                      top: Radius.circular(32)),
+                                ),
+                                child: _ResetPasswordScreen(
+                                    email: _username.text.trim()),
+                              ),
+                            );
+                          },
+                          child: const Text('Enter Code'),
+                        ),
+                      ],
                     ),
                   ],
                 ],

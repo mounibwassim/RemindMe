@@ -250,9 +250,8 @@ import time
 @router.post("/firebase/forgot-password")
 def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
     """
-    Send password reset email via Firebase REST API.
-    Firebase sends the email from their own servers — no SMTP required.
-    Works on Render Free Tier.
+    Send password reset email via native SMTP or Supabase OTP fallback.
+    Works on local development and Render Free Tier.
     """
     client_ip = request.client.host if request.client else "unknown"
     check_rate_limit(f"forgot_password_{client_ip}", max_requests=3, window_minutes=15)
@@ -286,22 +285,18 @@ def firebase_forgot_password(payload: ForgotPasswordRequest, request: Request):
         email = user_data.get("email")
         auth_logger.info(f"[Forgot Password] Resolved username '{payload.username}' -> email: {email}")
     
-    # Use Firebase REST API to send password reset email.
-    # Firebase handles sending from their own SMTP infrastructure — no port 587 needed.
-    from backend.firebase_service import reset_password_email as firebase_send_reset
-    auth_logger.info(f"[Forgot Password] Sending Firebase password reset email to: {email}")
-    
-    data, error = firebase_send_reset(email)
+    auth_logger.info(f"[Forgot Password] Triggering recovery email for: {email}")
+    data, error = reset_password_email(email)
     
     if error:
-        auth_logger.error(f"[Forgot Password] Firebase reset email failed: {error}")
+        auth_logger.error(f"[Forgot Password] Recovery email failed: {error}")
         raise HTTPException(
             status_code=400,
             detail=f"Failed to send recovery email: {error}"
         )
     
-    auth_logger.info(f"[Forgot Password] Firebase reset email sent successfully to {email}")
-    return {"message": "Recovery email sent successfully. Please check your inbox and follow the link to reset your password."}
+    auth_logger.info(f"[Forgot Password] Recovery email triggered successfully for {email}")
+    return {"message": "Recovery email sent successfully. Please check your inbox for the 6-digit recovery code."}
 
 
 

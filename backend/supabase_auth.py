@@ -126,13 +126,20 @@ def reset_password_email(email, platform='web'):
             logger.info("Real recovery email sent to %s", email)
             return {"message": "OTP_SENT_TO_EMAIL", "email": email}, None
         else:
-            logger.error("Failed to send real email: %s", error)
-            # Fallback for developer awareness
-            return {
-                "message": "OTP_GENERATED_BUT_EMAIL_FAILED", 
-                "otp_code": otp, 
-                "error": error
-            }, None
+            logger.error("Failed to send native SMTP email: %s. Trying Supabase OTP fallback...", error)
+            try:
+                # Call Supabase sign_in_with_otp to send a 6-digit OTP code via Supabase's mailer
+                res = supabase.auth.sign_in_with_otp({
+                    "email": email,
+                    "options": {
+                        "should_create_user": False
+                    }
+                })
+                logger.info("Supabase OTP fallback successful for %s", email)
+                return {"message": "OTP_SENT_VIA_SUPABASE", "email": email}, None
+            except Exception as se:
+                logger.error("Supabase OTP fallback failed: %s", se)
+                return None, f"Failed to send email. SMTP error: {error}. Supabase error: {str(se)}"
             
     except Exception as e:
         traceback.print_exc()
@@ -149,7 +156,6 @@ def confirm_password_reset(otp_code, new_password, email=None):
         if verify_and_consume_otp(email, otp_code):
             logger.info("Local OTP verified for %s. Resetting password via admin API.", email)
             # Find the user ID for this email
-            # We can use admin.list_users() or we could have stored it. For now list_users is fine since we do it once per reset
             user_res = supabase_admin.auth.admin.list_users()
             user = next((u for u in user_res if u.email == email), None)
             if not user:
@@ -159,7 +165,38 @@ def confirm_password_reset(otp_code, new_password, email=None):
             response = supabase_admin.auth.admin.update_user_by_id(user.id, {"password": new_password})
             return response, None
 
-        return None, "Invalid or expired reset token"
+        # Fallback to verifying Supabase OTP
+        logger.info("Local OTP verification failed or not found. Attempting Supabase OTP verification for %s...", email)
+        
+        verify_res = None
+        verify_error = None
+        
+        # Sequentially try different verification types to guarantee compatibility
+        for otp_type in ["email", "recovery", "magiclink"]:
+            try:
+                logger.info("Attempting Supabase verify_otp with type=%s...", otp_type)
+                # Initialize a temporary client to avoid polluting the shared client session
+                temp_client = create_client(url, key)
+                verify_res = temp_client.auth.verify_otp({
+                    "email": email,
+                    "token": otp_code,
+                    "type": otp_type
+                })
+                if verify_res and verify_res.user:
+                    logger.info("Supabase verify_otp succeeded with type=%s", otp_type)
+                    break
+            except Exception as e:
+                logger.warning("Supabase verify_otp failed with type=%s: %s", otp_type, e)
+                verify_error = e
+
+        if verify_res and verify_res.user:
+            user_id = verify_res.user.id
+            logger.info("Supabase OTP verified. Resetting password for user %s via admin API.", user_id)
+            response = supabase_admin.auth.admin.update_user_by_id(user_id, {"password": new_password})
+            return response, None
+            
+        err_detail = str(verify_error) if verify_error else "Invalid or expired recovery code."
+        return None, f"Invalid or expired recovery code. Details: {err_detail}"
     except Exception as e:
         import traceback
         logger.error("OTP Verification failed with exception: %s\n%s", e, traceback.format_exc())
