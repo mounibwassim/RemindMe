@@ -80,6 +80,7 @@ class ApiClient {
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
         if (sessionId != null) 'X-Session-Id': sessionId!,
+        'X-Timezone-Offset': DateTime.now().timeZoneOffset.inMinutes.toString(),
       };
 
   Uri _uri(String path) => Uri.parse('$baseUrl$path');

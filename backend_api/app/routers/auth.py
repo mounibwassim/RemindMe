@@ -212,11 +212,11 @@ def firebase_signin(payload: LoginRequest, request: Request):
     cloud_passphrase_uid = cloud_metadata.get("passphrase_uid") if isinstance(cloud_metadata, dict) else None
     
     if cloud_salt_hex:
-        if local_salt is None:
+        if local_salt is None or local_salt.hex() != cloud_salt_hex:
             try:
                 restored_salt = bytes.fromhex(cloud_salt_hex)
                 save_salt_for(final_username, restored_salt, path=str(DATA_DIR))
-                print(f"DEBUG: Restored local salt for {final_username} from cloud metadata.")
+                print(f"DEBUG: Restored local salt for {final_username} from cloud metadata (was different or missing).")
             except Exception as e:
                 print(f"DEBUG ERROR: Failed to restore local salt: {e}")
     elif local_salt is not None:

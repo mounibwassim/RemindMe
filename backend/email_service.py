@@ -90,7 +90,7 @@ def send_email(to_email: str, subject: str, body: str):
 
         if not resend_from:
             errors.append(
-                "Resend testing mode can only email the Resend account owner. "
+                f"Resend testing mode can only email the Resend account owner ({RESEND_TEST_OWNER_EMAIL}). "
                 "Configure SMTP, Brevo, or RESEND_FROM_EMAIL from a verified Resend domain."
             )
         else:

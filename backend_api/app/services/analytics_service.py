@@ -7,12 +7,14 @@ from app.services.task_service import list_tasks_for_session
 import backend.supabase_service as supabase
 
 
-def get_analytics_summary(session: UserSession, period: str = "week") -> AnalyticsSummaryResponse:
+def get_analytics_summary(session: UserSession, period: str = "week", tz_offset_min: int = 0) -> AnalyticsSummaryResponse:
     task_models = list_tasks_for_session(session)
     ai_insight = InsightsService.generate_insights(task_models)
 
     total = len(task_models)
     now_utc = datetime.now(timezone.utc)
+    user_local_time = now_utc + timedelta(minutes=tz_offset_min)
+    user_today = user_local_time.date()
     
     pending_tasks = []
     upcoming_tasks = []
@@ -49,9 +51,9 @@ def get_analytics_summary(session: UserSession, period: str = "week") -> Analyti
 
     # Weekly/Monthly distribution (reusing weekly fields for simplicity in frontend display)
     if period == "month":
-        weekly = _get_monthly_distribution_in_memory(task_models)
+        weekly = _get_monthly_distribution_in_memory(task_models, tz_offset_min=tz_offset_min)
     else:
-        weekly = _get_weekly_distribution_in_memory(task_models)
+        weekly = _get_weekly_distribution_in_memory(task_models, tz_offset_min=tz_offset_min)
 
     # Audit stats (From Supabase logs)
     # We fetch a larger batch to calculate stats (Increased to 1000 to ensure we catch all notifications)
@@ -76,29 +78,28 @@ def get_analytics_summary(session: UserSession, period: str = "week") -> Analyti
     missed_count = 0
 
     # Weekly/Monthly Stats
-    today_dt = datetime.now()
     if period == "month":
-        start_date = today_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0).date()
-        if today_dt.month == 12:
-            end_date = date(today_dt.year + 1, 1, 1) - timedelta(days=1)
+        start_date = user_today.replace(day=1)
+        if user_today.month == 12:
+            end_date = date(user_today.year + 1, 1, 1) - timedelta(days=1)
         else:
-            end_date = date(today_dt.year, today_dt.month + 1, 1) - timedelta(days=1)
+            end_date = date(user_today.year, user_today.month + 1, 1) - timedelta(days=1)
     else:
         # Default to week
-        monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        start_date = monday.date()
-        end_date = (monday + timedelta(days=6)).date()
+        monday = user_today - timedelta(days=user_today.weekday())
+        start_date = monday
+        end_date = monday + timedelta(days=6)
 
     def _date_in_period(ts_str: str) -> bool:
         if not ts_str: return False
         try:
-            # Parse as UTC and convert to local server timezone
+            # Parse as UTC and convert to client local timezone
             clean_iso = ts_str.replace("Z", "+00:00")
             dt = datetime.fromisoformat(clean_iso)
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            local_dt = dt.astimezone()
-            return start_date <= local_dt.date() <= end_date
+            client_dt = dt + timedelta(minutes=tz_offset_min)
+            return start_date <= client_dt.date() <= end_date
         except Exception as e:
             print(f"Error parsing date {ts_str}: {e}")
             return False
@@ -188,10 +189,13 @@ def get_analytics_summary(session: UserSession, period: str = "week") -> Analyti
     )
 
 
-def _get_weekly_distribution_in_memory(tasks: list) -> dict:
-    today = date.today()
-    # Find the most recent Monday
-    monday = today - timedelta(days=today.weekday())
+def _get_weekly_distribution_in_memory(tasks: list, tz_offset_min: int = 0) -> dict:
+    now_utc = datetime.now(timezone.utc)
+    user_local_time = now_utc + timedelta(minutes=tz_offset_min)
+    user_today = user_local_time.date()
+    
+    # Find the most recent Monday based on client local date
+    monday = user_today - timedelta(days=user_today.weekday())
     labels = []
     counts = [0] * 7
     days = []
@@ -203,9 +207,13 @@ def _get_weekly_distribution_in_memory(tasks: list) -> dict:
     for task in tasks:
         if task.completed_iso:
             try:
-                # task.completed_iso might be '2026-05-14T...' or '2026-05-14 ...'
-                ts = task.completed_iso.split("T")[0].split(" ")[0]
-                comp_dt = date.fromisoformat(ts)
+                # Convert task.completed_iso to client local timezone date
+                clean_iso = task.completed_iso.replace("Z", "+00:00")
+                comp_dt_utc = datetime.fromisoformat(clean_iso)
+                if comp_dt_utc.tzinfo is None:
+                    comp_dt_utc = comp_dt_utc.replace(tzinfo=timezone.utc)
+                comp_dt_local = comp_dt_utc + timedelta(minutes=tz_offset_min)
+                comp_dt = comp_dt_local.date()
                 if comp_dt in days:
                     idx = days.index(comp_dt)
                     counts[idx] += 1
@@ -225,15 +233,18 @@ def _get_weekly_distribution_in_memory(tasks: list) -> dict:
     }
 
 
-def _get_monthly_distribution_in_memory(tasks: list) -> dict:
-    today = date.today()
+def _get_monthly_distribution_in_memory(tasks: list, tz_offset_min: int = 0) -> dict:
+    now_utc = datetime.now(timezone.utc)
+    user_local_time = now_utc + timedelta(minutes=tz_offset_min)
+    user_today = user_local_time.date()
+    
     # Weeks of the current month
     labels = ["W1", "W2", "W3", "W4"]
     counts = [0] * 4
     
     # Check if the month has a 5th week (day 29+)
-    year = today.year
-    month = today.month
+    year = user_today.year
+    month = user_today.month
     if month == 12:
         last_day = (date(year + 1, 1, 1) - timedelta(days=1)).day
     else:
@@ -246,8 +257,13 @@ def _get_monthly_distribution_in_memory(tasks: list) -> dict:
     for task in tasks:
         if task.completed_iso:
             try:
-                ts = task.completed_iso.split("T")[0].split(" ")[0]
-                comp_dt = date.fromisoformat(ts)
+                clean_iso = task.completed_iso.replace("Z", "+00:00")
+                comp_dt_utc = datetime.fromisoformat(clean_iso)
+                if comp_dt_utc.tzinfo is None:
+                    comp_dt_utc = comp_dt_utc.replace(tzinfo=timezone.utc)
+                comp_dt_local = comp_dt_utc + timedelta(minutes=tz_offset_min)
+                comp_dt = comp_dt_local.date()
+                
                 if comp_dt.year == year and comp_dt.month == month:
                     day = comp_dt.day
                     if day <= 7:
@@ -263,7 +279,7 @@ def _get_monthly_distribution_in_memory(tasks: list) -> dict:
             except Exception:
                 continue
                 
-    month_name = today.strftime("%B %Y")
+    month_name = user_today.strftime("%B %Y")
     return {
         "labels": labels,
         "counts": counts,
@@ -271,7 +287,7 @@ def _get_monthly_distribution_in_memory(tasks: list) -> dict:
     }
 
 
-def get_recent_audit_logs(session: UserSession, period: str = "week", limit: int = 200) -> list[AuditLogResponse]:
+def get_recent_audit_logs(session: UserSession, period: str = "week", limit: int = 200, tz_offset_min: int = 0) -> list[AuditLogResponse]:
     # ── Auto Cleanup Old Audit Logs (60 days) ──────────────────────────────────
     try:
         today_dt = datetime.now()
@@ -289,12 +305,16 @@ def get_recent_audit_logs(session: UserSession, period: str = "week", limit: int
         rows = supabase.get_audit_logs(session.uid, limit=limit)
         logs: list[AuditLogResponse] = []
         
-        today_dt = datetime.now()
-        monday = (today_dt - timedelta(days=today_dt.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        first_of_month = today_dt.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        now_utc = datetime.now(timezone.utc)
+        user_local_time = now_utc + timedelta(minutes=tz_offset_min)
         
-        monday_utc = monday.astimezone(timezone.utc)
-        first_of_month_utc = first_of_month.astimezone(timezone.utc)
+        # Calculate Monday and first_of_month in client local time
+        user_monday = (user_local_time - timedelta(days=user_local_time.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        user_first_of_month = user_local_time.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        
+        # Convert client local Monday/first_of_month back to UTC
+        monday_utc = user_monday - timedelta(minutes=tz_offset_min)
+        first_of_month_utc = user_first_of_month - timedelta(minutes=tz_offset_min)
         
         for row in rows:
             created_at = row.get("created_at", "")

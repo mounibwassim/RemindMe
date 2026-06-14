@@ -207,6 +207,12 @@ def _update_password_and_verify_login(email, user_id, new_password):
 
 def reset_password_email(email, platform='web'):
     logger.info("[Forgot Password] OTP generation initiated for email: %s", email)
+    # Reload .env at runtime so OTP_WHITELIST changes take effect without
+    # requiring a full backend restart (helpful during troubleshooting).
+    try:
+        load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), "backend_api", ".env"))
+    except Exception:
+        pass
     try:
         user_obj, lookup_error = get_auth_user_by_email(email)
         if lookup_error or not user_obj:
@@ -239,9 +245,28 @@ def reset_password_email(email, platform='web'):
             # Keep the developer log for local debugging, but do not report success
             # unless the user can actually receive the code by email.
             logger.critical(f"[Forgot Password] DEVELOPER FALLBACK: OTP for {email} is: {otp}")
-            # In development, expose the OTP in the response so users can complete the flow
+
+            # In development, always expose the OTP for testing convenience.
             if os.environ.get("APP_ENV", "development") != "production":
                 return {"message": "OTP_SENT_TO_EMAIL", "email": email, "info": error, "developer_otp": otp}, None
+
+            # Production: allow an explicit whitelist of emails to receive the
+            # developer OTP in the response when external delivery fails. This
+            # is a controlled escape hatch for troubleshooting accounts that
+            # cannot receive mail due to provider/network issues.
+            otp_whitelist = os.environ.get("OTP_WHITELIST", "")
+            try:
+                whitelist = [e.strip().lower() for e in otp_whitelist.split(",") if e.strip()]
+            except Exception:
+                whitelist = []
+
+            if email.strip().lower() in whitelist:
+                logger.warning(
+                    "[Forgot Password] Email delivery failed but '%s' is in OTP_WHITELIST — returning developer_otp in response.",
+                    email,
+                )
+                return {"message": "OTP_SENT_TO_EMAIL", "email": email, "info": error, "developer_otp": otp}, None
+
             return None, f"Email delivery failed: {error}"
             
     except Exception as e:

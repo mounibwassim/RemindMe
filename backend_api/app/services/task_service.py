@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 from fastapi import HTTPException
 
-from backend.crypto import decrypt_bytes, encrypt_bytes
+from backend.crypto import decrypt_bytes, encrypt_bytes, derive_key, load_salt_for
 import backend.supabase_service as supabase
 
 from app.schemas import TaskCreateRequest, TaskResponse, TaskUpdateRequest
-from app.services.session_store import UserSession
+from app.services.session_store import UserSession, DATA_DIR
 
 
 def _row_to_task(session: UserSession, row) -> TaskResponse:
@@ -18,7 +18,8 @@ def _row_to_task(session: UserSession, row) -> TaskResponse:
     is_completed = row.get("is_completed", False)
     created_iso = row.get("created_at")
     
-    title = "Unable to decrypt task"
+    db_title = row.get("title")
+    title = db_title if db_title else "Unable to decrypt task"
     desc = ""
     
     if encrypted_payload and ":" in encrypted_payload:
@@ -33,10 +34,39 @@ def _row_to_task(session: UserSession, row) -> TaskResponse:
             else:
                 title = plaintext
         except Exception as e:
+            # Attempt safe fallbacks: try deriving keys from alternative secrets
             print(f"DEBUG: Decryption failed for task {task_id}: {e}")
-            title = "Unable to decrypt task"
+            try:
+                salt = load_salt_for(session.username, path=str(DATA_DIR))
+            except Exception:
+                salt = None
+
+            tried = False
+            if salt:
+                # Try older/alternate passphrase formats
+                candidates = [
+                    f"{session.username}:{session.email}:{session.uid}",
+                    f"{session.username}:{session.email}",
+                ]
+                for cand in candidates:
+                    try:
+                        alt_key = derive_key(cand, salt)
+                        plaintext = decrypt_bytes(ct_b64, nonce_b64, alt_key).decode("utf-8")
+                        if "\n" in plaintext:
+                            parts = plaintext.split("\n", 1)
+                            title = parts[0]
+                            desc = parts[1]
+                        else:
+                            title = plaintext
+                        tried = True
+                        print(f"DEBUG: Decryption succeeded for task {task_id} using alternate passphrase.")
+                        break
+                    except Exception:
+                        continue
+
+            if not tried:
+                title = db_title if db_title else "Unable to decrypt task"
     else:
-        db_title = row.get("title")
         if db_title:
             title = db_title
         else:

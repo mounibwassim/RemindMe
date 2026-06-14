@@ -64,7 +64,8 @@ class AppState extends ChangeNotifier {
   bool encryptionVisible = false;
   String auditPeriod = "week"; // "week" or "month"
 
-  final StreamController<TaskItem> _triggeredTaskController = StreamController<TaskItem>.broadcast();
+  final StreamController<TaskItem> _triggeredTaskController =
+      StreamController<TaskItem>.broadcast();
   Stream<TaskItem> get onTaskTriggered => _triggeredTaskController.stream;
 
   bool get isNotificationPermissionGranted =>
@@ -246,8 +247,8 @@ class AppState extends ChangeNotifier {
       api.baseUrl = customUrl;
     } else {
       const explicitUrl = String.fromEnvironment('API_URL');
-      api.baseUrl = explicitUrl.isNotEmpty 
-          ? explicitUrl 
+      api.baseUrl = explicitUrl.isNotEmpty
+          ? explicitUrl
           : 'https://remindme-backend-k9mb.onrender.com';
     }
 
@@ -462,13 +463,15 @@ class AppState extends ChangeNotifier {
     } catch (e, stack) {
       debugPrint('ForgotPassword Critical Failure: $e');
       if (e is ConnectionException) {
-        errorMessage = 'Connection error. Please verify the backend server is running.';
+        errorMessage =
+            'Connection error. Please verify the backend server is running.';
       } else {
         final msg = e.toString();
         if (msg.contains('getaddrinfo') ||
             msg.contains('SocketException') ||
             msg.contains('Failed host lookup')) {
-          errorMessage = 'Database connection error. Please make sure the Supabase database is active/unpaused.';
+          errorMessage =
+              'Database connection error. Please make sure the Supabase database is active/unpaused.';
         } else {
           errorMessage = msg;
         }
@@ -513,9 +516,21 @@ class AppState extends ChangeNotifier {
 
   Future<void> changePassword(
       String currentPassword, String newPassword) async {
-    await _guard(() async {
+    // For password changes we must surface backend errors to the UI so the
+    // caller can decide what to do (e.g. show "current password incorrect"
+    // and NOT sign the user out). Do not swallow exceptions here.
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
       await api.changePassword(currentPassword, newPassword);
-    });
+    } catch (e) {
+      // Propagate the error so callers (UI) can handle it explicitly.
+      rethrow;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
   }
 
   // ── Task Operations (Global Synchronization with Caching & Offline Queuing)
@@ -964,10 +979,13 @@ class AppState extends ChangeNotifier {
 
   void toggleThemeMode() {
     if (themeMode == ThemeMode.system) {
-      final brightness = WidgetsBinding.instance.platformDispatcher.platformBrightness;
-      themeMode = brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark;
+      final brightness =
+          WidgetsBinding.instance.platformDispatcher.platformBrightness;
+      themeMode =
+          brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark;
     } else {
-      themeMode = themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      themeMode =
+          themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     }
     _saveThemePreference();
     notifyListeners();
@@ -1058,13 +1076,15 @@ class AppState extends ChangeNotifier {
     } catch (e, stack) {
       debugPrint('AppState Error: $e\n$stack');
       if (e is ConnectionException) {
-        errorMessage = 'Connection error. Please verify the backend server is running.';
+        errorMessage =
+            'Connection error. Please verify the backend server is running.';
       } else {
         final msg = e.toString();
         if (msg.contains('getaddrinfo') ||
             msg.contains('SocketException') ||
             msg.contains('Failed host lookup')) {
-          errorMessage = 'Database connection error. Please make sure the Supabase database is active/unpaused.';
+          errorMessage =
+              'Database connection error. Please make sure the Supabase database is active/unpaused.';
         } else {
           errorMessage = msg;
         }

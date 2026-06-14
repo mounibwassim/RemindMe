@@ -778,8 +778,17 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
       }
     } catch (e) {
       if (mounted) {
+        String errorMsg = e.toString();
+        if (errorMsg.contains('Current password incorrect') ||
+            errorMsg.contains('incorrect') ||
+            errorMsg.contains('401')) {
+          errorMsg = 'Current password is incorrect.';
+        }
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(
+            content: Text(errorMsg),
+            backgroundColor: Colors.redAccent,
+          ),
         );
       }
     }
