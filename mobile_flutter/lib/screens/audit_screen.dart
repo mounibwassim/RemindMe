@@ -45,11 +45,20 @@ class _AuditScreenState extends State<AuditScreen> {
     }
   }
 
+  /// Filter logs only by action type (period is already handled server-side)
+  List<AuditLog> _applyActionFilter(List<AuditLog> logs) {
+    if (_filter == 'all') return logs;
+    return logs.where((log) {
+      return log.cleanActionName == _filter;
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final colors = Theme.of(context).colorScheme;
-    final logs = _filteredLogs(state.auditLogs, state.auditPeriod);
+    // API already returns period-filtered logs — just apply action filter
+    final logs = _applyActionFilter(state.auditLogs);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -166,7 +175,7 @@ class _AuditScreenState extends State<AuditScreen> {
                   children: [
                     _AuditStat(
                       icon: Icons.history_rounded,
-                      value: '${state.analytics?.audit['total_actions'] ?? 0}',
+                      value: '${state.analytics?.audit['total_actions'] ?? state.auditLogs.length}',
                       label: 'All',
                       color: Colors.white,
                       onTap: () => setState(() => _filter = 'all'),
@@ -271,15 +280,18 @@ class _AuditScreenState extends State<AuditScreen> {
                       children: [
                         Icon(Icons.history_rounded,
                             size: 48,
-                            color: colors.onSurfaceVariant.withValues(alpha: 0.3)),
+                            color: colors.onSurfaceVariant
+                                .withValues(alpha: 0.3)),
                         const SizedBox(height: 12),
                         Text(
-                          'No logs found',
+                          state.isLoading
+                              ? 'Loading logs...'
+                              : 'No logs found',
                           style: GoogleFonts.outfit(
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
-                            color: colors.onSurfaceVariant
-                                .withValues(alpha: 0.5),
+                            color:
+                                colors.onSurfaceVariant.withValues(alpha: 0.5),
                           ),
                         ),
                       ],
@@ -303,38 +315,6 @@ class _AuditScreenState extends State<AuditScreen> {
         ],
       ),
     );
-  }
-
-  bool _isLogInPeriod(AuditLog log, String period) {
-    final now = DateTime.now();
-    final logDate = log.timestamp.toLocal();
-    if (period == 'month') {
-      final start = DateTime(now.year, now.month, 1);
-      final end = DateTime(now.year, now.month + 1, 1)
-          .subtract(const Duration(microseconds: 1));
-      return logDate.isAfter(start.subtract(const Duration(microseconds: 1))) &&
-          logDate.isBefore(end);
-    } else {
-      final monday = now.subtract(Duration(days: now.weekday - 1));
-      final start = DateTime(monday.year, monday.month, monday.day);
-      final end = start
-          .add(const Duration(days: 7))
-          .subtract(const Duration(microseconds: 1));
-      return logDate.isAfter(start.subtract(const Duration(microseconds: 1))) &&
-          logDate.isBefore(end);
-    }
-  }
-
-  List<AuditLog> _filteredLogs(List<AuditLog> logs, String period) {
-    final periodLogs =
-        logs.where((log) => _isLogInPeriod(log, period)).toList();
-
-    if (_filter == 'all') return periodLogs;
-
-    return periodLogs.where((log) {
-      final action = log.cleanActionName.toLowerCase();
-      return action == _filter;
-    }).toList();
   }
 }
 
@@ -402,8 +382,7 @@ class _AuditLogTile extends StatelessWidget {
   final int index;
 
   IconData _getIcon() {
-    final action = log.cleanActionName.toLowerCase();
-    switch (action) {
+    switch (log.cleanActionName) {
       case 'created':
         return Icons.add_circle_rounded;
       case 'completed':
@@ -424,16 +403,15 @@ class _AuditLogTile extends StatelessWidget {
   }
 
   Color _getColor() {
-    final action = log.cleanActionName.toLowerCase();
-    switch (action) {
+    switch (log.cleanActionName) {
       case 'created':
         return const Color(0xFF22C55E); // green
       case 'completed':
-        return const Color(0xFF22C55E); // green (checkmark)
+        return const Color(0xFF22C55E); // green
       case 'snoozed':
         return const Color(0xFFF59E0B); // amber
       case 'notified':
-        return const Color(0xFF6B7280); // dark grey (info)
+        return const Color(0xFF6B7280); // grey
       case 'deleted':
         return const Color(0xFFEF4444); // red
       case 'edited':
@@ -445,8 +423,7 @@ class _AuditLogTile extends StatelessWidget {
     }
   }
 
-  /// Returns the action label exactly like in the reference image:
-  /// "Study (Created)", "Work (Deleted)", "Sport (Completed)", etc.
+  /// Formats as "TaskName (Action)" — e.g. "Study (Created)"
   String _buildDisplayLabel() {
     final taskName = log.taskTitle;
     final action = _capitalizedAction();
@@ -460,9 +437,9 @@ class _AuditLogTile extends StatelessWidget {
   }
 
   String _capitalizedAction() {
-    final action = log.cleanActionName;
-    if (action.isEmpty) return 'Activity';
-    return action[0].toUpperCase() + action.substring(1).toLowerCase();
+    final a = log.cleanActionName;
+    if (a.isEmpty) return 'Activity';
+    return a[0].toUpperCase() + a.substring(1);
   }
 
   @override
@@ -478,8 +455,8 @@ class _AuditLogTile extends StatelessWidget {
         color: colors.surfaceContainerLowest.withValues(alpha: 0.5),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
-          side: BorderSide(
-              color: colors.outlineVariant.withValues(alpha: 0.2)),
+          side:
+              BorderSide(color: colors.outlineVariant.withValues(alpha: 0.2)),
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
