@@ -112,18 +112,6 @@ class _LoginScreenState extends State<LoginScreen>
           // ── Futuristic Background ─────────────────────────────────
           const _FuturisticBackground(),
 
-          Positioned(
-            top: 16,
-            right: 16,
-            child: SafeArea(
-              child: IconButton(
-                icon: const Icon(Icons.dns_outlined, color: Colors.white70),
-                tooltip: 'Configure API Server',
-                onPressed: () => _showServerConfigDialog(context, state),
-              ),
-            ),
-          ),
-
           SafeArea(
             child: Center(
               child: SingleChildScrollView(

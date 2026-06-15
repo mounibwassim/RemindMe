@@ -124,6 +124,9 @@ class AnalyticsSummaryResponse(BaseModel):
     weekly_labels: list[str]
     weekly_counts: list[int]
     weekly_range: str
+    monthly_labels: list[str] = []
+    monthly_counts: list[int] = []
+    monthly_range: str = ""
     audit: dict
     completion_rate: float = 0.0
     ai_insight: str = ""

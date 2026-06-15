@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 class AuditLog {
   const AuditLog({
     required this.id,
@@ -48,34 +50,103 @@ class AuditLog {
     }
   }
 
-  String get eventLabel {
-    String label = taskTitle;
-    final e = event.startsWith('task_') ? event.substring(5) : event;
-    
-    String action = '';
-    switch (e) {
-      case 'created': action = 'Created'; break;
-      case 'completed': action = 'Completed'; break;
-      case 'deleted': action = 'Deleted'; break;
-      case 'edited': action = 'Edited'; break;
-      case 'snoozed': action = 'Snoozed'; break;
-      case 'reopened': action = 'Reopened'; break;
-      case 'notified':
-      case 'notification_triggered':
-      case 'notification_sent':
-        action = 'Notified'; break;
-      case 'notification_scheduled': action = 'Scheduled'; break;
-      default: action = e.replaceAll('_', ' ').toUpperCase();
+  Map<String, dynamic>? get structuredDetails {
+    if (extra == null || !extra!.trim().startsWith('{')) return null;
+    try {
+      return jsonDecode(extra!);
+    } catch (_) {
+      return null;
     }
-
-    if (label != 'Untitled Task') {
-      return '$label ($action)';
-    }
-    return action;
   }
 
-  // Helper for specific columns where they just want the title
+  String get userName => structuredDetails?['user_name'] ?? 'System';
+  String get userEmail => structuredDetails?['user_email'] ?? '';
+  String get actionType {
+    if (structuredDetails != null) return structuredDetails!['action_type'] ?? event;
+    return event.startsWith('task_') ? event.substring(5) : event;
+  }
+  String get module {
+    if (structuredDetails != null) return structuredDetails!['module'] ?? 'Tasks';
+    return event.contains('notification') ? 'Notifications' : 'Tasks';
+  }
+  String get recordId => structuredDetails?['record_id'] ?? taskId ?? 'N/A';
+  String get previousValue => structuredDetails?['previous_value'] ?? '';
+  String get newValue => structuredDetails?['new_value'] ?? '';
+  String get status => structuredDetails?['status'] ?? 'Success';
+  String get notes => structuredDetails?['notes'] ?? extra ?? '';
+
+  String get cleanTaskName {
+    if (structuredDetails != null) {
+      final name = structuredDetails!['new_value'] ?? structuredDetails!['previous_value'] ?? '';
+      if (name.isNotEmpty) return name;
+    }
+    final e = event.toLowerCase();
+    if (e.contains('reset') || e.contains('clear')) {
+      return 'System Tasks';
+    }
+    String label = extra ?? '';
+    if (label.isEmpty) return 'Untitled Task';
+    
+    if (label.startsWith('Task: ')) {
+      final parts = label.substring(6).split(' — ');
+      return parts[0].trim();
+    }
+    if (label.startsWith('Created task: ')) {
+      return label.substring(14).trim();
+    }
+    if (label.startsWith('Completed task: ')) {
+      return label.substring(16).trim();
+    }
+    if (label.startsWith('Deleted task: ')) {
+      return label.substring(13).trim();
+    }
+    if (label.startsWith("Snoozed '")) {
+      final endIdx = label.indexOf("'", 9);
+      if (endIdx != -1) {
+        return label.substring(9, endIdx);
+      }
+    }
+    if (label.startsWith('Snoozed task: ')) {
+      return label.substring(14).trim();
+    }
+    if (label.contains('Snoozed')) {
+      final match = RegExp(r"Snoozed\s+'([^']+)'").firstMatch(label);
+      if (match != null) return match.group(1)!;
+    }
+    return label;
+  }
+
+  String get cleanActionName {
+    final e = event.toLowerCase();
+    if (e.contains('create') || e.contains('add')) {
+      return 'created';
+    }
+    if (e.contains('complete')) {
+      return 'completed';
+    }
+    if (e.contains('snooze')) {
+      return 'snoozed';
+    }
+    if (e.contains('edit') || e.contains('updat') || e.contains('modif')) {
+      return 'edited';
+    }
+    if (e.contains('delete') || e.contains('remov')) {
+      return 'deleted';
+    }
+    if (e.contains('notif') || e.contains('sent') || e.contains('trigger')) {
+      return 'notified';
+    }
+    if (e.contains('reset') || e.contains('clear')) {
+      return 'reset';
+    }
+    return 'activity';
+  }
+
   String get taskTitle {
+    if (structuredDetails != null) {
+      final val = newValue.isNotEmpty ? newValue : previousValue;
+      return val.isNotEmpty ? val : 'System Event';
+    }
     String label = extra ?? '';
     if (label.isNotEmpty) {
       // Clean up common prefixes and technical noise
@@ -88,6 +159,15 @@ class AuditLog {
       return label.trim().split(' (')[0].trim().replaceAll(RegExp(r'\s+'), ' ');
     }
     return 'Untitled Task';
+  }
+
+  String get eventLabel {
+    final title = taskTitle;
+    final action = actionType.replaceAll('task_', '').replaceAll('notification_', '').replaceAll('_', ' ').toUpperCase();
+    if (title != 'Untitled Task' && title != 'System Event') {
+      return '$title ($action)';
+    }
+    return action;
   }
 
   factory AuditLog.fromJson(Map<String, dynamic> json) {

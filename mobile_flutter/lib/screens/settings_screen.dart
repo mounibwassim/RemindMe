@@ -202,6 +202,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
             childrenBuilder: (ctx) => [
               _buildSettingsGroup([
                 _SettingTile(
+                  icon: Icons.notifications_active_outlined,
+                  title: 'Request Notification Permission',
+                  subtitle: 'Prompt the system to allow RemindMe notifications',
+                  onTap: () async {
+                    await state.requestNotificationPermissions();
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                        content: Text(state.isNotificationPermissionGranted
+                            ? 'Notifications permission granted.'
+                            : 'Notifications permission not granted.'),
+                      ));
+                    }
+                  },
+                ),
+                _SettingTile(
+                  icon: Icons.notifications,
+                  title: 'Send Test Notification',
+                  subtitle:
+                      'Send an immediate test notification to this device',
+                  onTap: () async {
+                    await state.requestNotificationPermissions();
+                    await state.sendTestNotification();
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                        content: Text('Test notification sent (check device).'),
+                      ));
+                    }
+                  },
+                ),
+                _SettingTile(
+                  icon: Icons.alarm_on_rounded,
+                  title: 'Send 5s Test Alarm',
+                  subtitle: 'Schedule an exact alarm 5 seconds from now',
+                  onTap: () async {
+                    await state.requestNotificationPermissions();
+                    await state.sendTestScheduledNotification();
+                    if (ctx.mounted) {
+                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                        content: Text('5s test alarm scheduled.'),
+                      ));
+                    }
+                  },
+                ),
+                _SettingTile(
                   icon: Icons.info_outline_rounded,
                   title: 'About RemindMe',
                   trailing: const Icon(Icons.chevron_right_rounded),
@@ -608,7 +652,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ],
     );
   }
-
 }
 
 class _SettingTile extends StatelessWidget {
@@ -817,8 +860,9 @@ class _ChangePasswordDialogState extends State<_ChangePasswordDialog> {
                 floatingLabelBehavior: FloatingLabelBehavior.always,
                 prefixIcon: const Icon(Icons.lock_person_outlined),
                 suffixIcon: IconButton(
-                  icon: Icon(
-                      _obscurePassword ? Icons.visibility : Icons.visibility_off),
+                  icon: Icon(_obscurePassword
+                      ? Icons.visibility
+                      : Icons.visibility_off),
                   onPressed: () =>
                       setState(() => _obscurePassword = !_obscurePassword),
                 ),

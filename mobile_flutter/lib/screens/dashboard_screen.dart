@@ -217,6 +217,8 @@ class DashboardScreen extends StatelessWidget {
           ),
         ),
 
+
+
         // ── AI Insight ───────────────────────────────────────────
         if (analytics != null && analytics.aiInsight.isNotEmpty)
           SliverToBoxAdapter(

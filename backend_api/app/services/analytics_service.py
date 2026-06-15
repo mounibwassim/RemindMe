@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, date, timezone
+import json
 
 from app.schemas import AnalyticsSummaryResponse, AuditLogResponse
 from app.services.insights_service import InsightsService
@@ -49,11 +50,9 @@ def get_analytics_summary(session: UserSession, period: str = "week", tz_offset_
     upcoming = len(upcoming_tasks)
     missed = len(missed_tasks)
 
-    # Weekly/Monthly distribution (reusing weekly fields for simplicity in frontend display)
-    if period == "month":
-        weekly = _get_monthly_distribution_in_memory(task_models, tz_offset_min=tz_offset_min)
-    else:
-        weekly = _get_weekly_distribution_in_memory(task_models, tz_offset_min=tz_offset_min)
+    # Calculate both weekly and monthly distributions
+    weekly = _get_weekly_distribution_in_memory(task_models, tz_offset_min=tz_offset_min)
+    monthly = _get_monthly_distribution_in_memory(task_models, tz_offset_min=tz_offset_min)
 
     # Audit stats (From Supabase logs)
     # We fetch a larger batch to calculate stats (Increased to 1000 to ensure we catch all notifications)
@@ -68,6 +67,7 @@ def get_analytics_summary(session: UserSession, period: str = "week", tz_offset_
         "completed_tasks": 0,
         "created_tasks": 0,
         "edited_tasks": 0,
+        "reset_events": 0,
         "missed_tasks": missed,
         "total_actions": 0,
         "avg_response_min": 0.0,
@@ -140,6 +140,8 @@ def get_analytics_summary(session: UserSession, period: str = "week", tz_offset_
             audit["edited_tasks"] += 1
         elif action in ["task_completed", "notification_completed_from_notification", "completed_from_notification"]:
             audit["completed_tasks"] += 1
+        elif action in ["system_reset", "logs_cleared", "all_tasks_cleared"]:
+            audit["reset_events"] += 1
         elif action in ["notification_missed", "reminder_missed", "notification_reminder_missed", "missed"]:
             missed_count += 1
 
@@ -154,7 +156,8 @@ def get_analytics_summary(session: UserSession, period: str = "week", tz_offset_
         audit.get("snoozed_events", 0) + 
         audit.get("completed_tasks", 0) +
         audit.get("edited_tasks", 0) +
-        audit.get("created_tasks", 0)
+        audit.get("created_tasks", 0) +
+        audit.get("reset_events", 0)
     )
 
     completion_rate = round((completed_count / total) * 100, 1) if total else 0.0
@@ -180,6 +183,9 @@ def get_analytics_summary(session: UserSession, period: str = "week", tz_offset_
         weekly_labels=weekly["labels"],
         weekly_counts=weekly["counts"],
         weekly_range=weekly["range"],
+        monthly_labels=monthly["labels"],
+        monthly_counts=monthly["counts"],
+        monthly_range=monthly["range"],
         audit=audit,
         completion_rate=completion_rate,
         ai_insight=ai_insight,
@@ -324,22 +330,44 @@ def get_recent_audit_logs(session: UserSession, period: str = "week", limit: int
                     ts = ts.replace(tzinfo=timezone.utc)
             except:
                 continue
-                
+
             if period == "week":
                 if ts < monday_utc:
                     continue
             elif period == "month":
                 if ts < first_of_month_utc:
                     continue
-                    
+
+            # Try to parse structured JSON details (if present) so the frontend
+            # can show the task title / record id and a friendlier event name.
+            details_raw = row.get("details", "") or ""
+            details_obj = None
+            task_id_val = None
+            event_val = row.get("action", "")
+            try:
+                if details_raw and details_raw.strip().startswith("{"):
+                    details_obj = json.loads(details_raw)
+            except Exception:
+                details_obj = None
+
+            if details_obj:
+                # Prefer the structured record_id when available
+                rid = details_obj.get("record_id") or details_obj.get("recordId")
+                if rid:
+                    task_id_val = str(rid)
+                # Prefer action_type from structured details when present
+                action_type = details_obj.get("action_type") or details_obj.get("action")
+                if action_type:
+                    event_val = action_type
+
             logs.append(
                 AuditLogResponse(
-                    id=row.get("id"),
-                    task_id=None, # Supabase logs don't always have task_id linked directly in same schema
-                    event=row.get("action", ""),
+                    id=str(row.get("id") or ""),
+                    task_id=str(task_id_val) if task_id_val else None,
+                    event=event_val,
                     timestamp_iso=created_at,
                     user_uid=row.get("user_id", ""),
-                    extra=row.get("details", ""),
+                    extra=details_raw,
                     notification_scheduled_at=row.get("notification_scheduled_at"),
                     notification_sent_at=row.get("notification_sent_at"),
                 )
@@ -393,6 +421,19 @@ def reset_analytics_for_session(session: UserSession):
 
         # Clear audit logs
         clear_all_audit_logs_for_session(session)
+        
+        # Log the reset action AFTER clearing logs, so there is at least one log showing the reset!
+        supabase.log_structured_audit(
+            user_id=session.uid,
+            action="system_reset",
+            module="System",
+            user_name=session.display_name or session.username,
+            user_email=session.email or "",
+            record_id="",
+            previous_value="All historical data",
+            new_value="Clean slate",
+            notes="Reset analytics data and cleared historical audit logs"
+        )
     except Exception as e:
         print(f"Error resetting analytics for {session.uid}: {e}")
         return

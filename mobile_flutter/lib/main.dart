@@ -57,6 +57,14 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   tzdata.initializeTimeZones();
 
+  // Initialize notifications early so the plugin is ready before any
+  // scheduling or background handlers are registered.
+  try {
+    await NotificationService().init();
+  } catch (e) {
+    debugPrint('Main: NotificationService.init() failed: $e');
+  }
+
   final prefs = await SharedPreferences.getInstance();
   final themeStr = prefs.getString('theme_mode') ?? 'light';
   final initialTheme = ThemeMode.values.firstWhere(

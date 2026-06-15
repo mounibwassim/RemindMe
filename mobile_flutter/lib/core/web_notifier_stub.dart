@@ -29,3 +29,7 @@ void cancelWebNotification(String id) {
 void cancelAllWebNotifications() {
   debugPrint('WebNotifierStub: cancelAllWebNotifications ignored on this platform');
 }
+
+void showWebNotification(String title, String body) {
+  debugPrint('WebNotifierStub: showWebNotification ignored on this platform');
+}

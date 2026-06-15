@@ -8,7 +8,10 @@ import '../models/assistant_reply.dart';
 import '../models/task.dart';
 
 class AssistantScreen extends StatefulWidget {
-  const AssistantScreen({super.key});
+  const AssistantScreen({super.key, this.onGoHome});
+
+  /// Called when the user taps the home button to go back to Dashboard.
+  final VoidCallback? onGoHome;
 
   @override
   State<AssistantScreen> createState() => _AssistantScreenState();
@@ -90,18 +93,22 @@ class _AssistantScreenState extends State<AssistantScreen> {
         children: [
           // ── Messages ────────────────────────────────────────────
           Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final msg = _messages[index];
-                return _ChatBubbleWidget(msg: msg)
-                    .animate()
-                    .fadeIn(duration: 300.ms)
-                    .slideY(begin: 0.05, end: 0, curve: Curves.easeOutQuad);
-              },
-            ),
+            child: _loadingHistory
+                ? const Center(
+                    child: CircularProgressIndicator(),
+                  )
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final msg = _messages[index];
+                      return _ChatBubbleWidget(msg: msg)
+                          .animate()
+                          .fadeIn(duration: 300.ms)
+                          .slideY(begin: 0.05, end: 0, curve: Curves.easeOutQuad);
+                    },
+                  ),
           ),
 
           // ── Typing Indicator ───────────────────────────────────
@@ -215,6 +222,20 @@ class _AssistantScreenState extends State<AssistantScreen> {
       ),
       child: Row(
         children: [
+          // ── Home Button ─────────────────────────────────────────
+          if (widget.onGoHome != null)
+            IconButton(
+              onPressed: widget.onGoHome,
+              icon: const Icon(Icons.home_rounded),
+              color: colors.primary,
+              tooltip: 'Go to Home',
+              style: IconButton.styleFrom(
+                backgroundColor: colors.primary.withValues(alpha: 0.1),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          if (widget.onGoHome != null) const SizedBox(width: 4),
+          // ── Reset Button ─────────────────────────────────────────
           IconButton(
             onPressed: () {
               context.read<AppState>().resetAssistantState();

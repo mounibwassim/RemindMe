@@ -44,9 +44,22 @@ def delete_log(log_id: int, session: UserSession = Depends(get_session)):
     return MessageResponse(message="Log entry deleted")
 
 
+from backend.supabase_service import supabase
+
 @router.delete("/audit", response_model=MessageResponse)
 def clear_logs(session: UserSession = Depends(get_session)):
     clear_all_audit_logs_for_session(session)
+    supabase.log_structured_audit(
+        user_id=session.uid,
+        action="logs_cleared",
+        module="System",
+        user_name=session.display_name or session.username,
+        user_email=session.email or "",
+        record_id="",
+        previous_value="All audit logs",
+        new_value="Empty list",
+        notes="Cleared all historical audit logs"
+    )
     return MessageResponse(message="All audit logs cleared")
 
 

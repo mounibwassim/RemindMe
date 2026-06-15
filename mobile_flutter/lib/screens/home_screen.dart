@@ -25,10 +25,22 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   int _index = 0;
   StreamSubscription<TaskItem>? _triggerSub;
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    // Create screens once — do NOT use a getter, which recreates widgets
+    // on every build and causes "deactivated widget" errors.
+    _screens = [
+      const DashboardScreen(),
+      const TasksScreen(),
+      const CalendarScreen(),
+      const HistoryScreen(),
+      AssistantScreen(onGoHome: () => setState(() => _index = 0)),
+      const AuditScreen(),
+      const SettingsScreen(),
+    ];
     _requestNotificationPermission();
 
     final state = context.read<AppState>();
@@ -109,16 +121,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  final _screens = const [
-    DashboardScreen(),
-    TasksScreen(),
-    CalendarScreen(),
-    HistoryScreen(),
-    AssistantScreen(),
-    AuditScreen(),
-    SettingsScreen(),
-  ];
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -141,33 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
-          if (state.isOffline || state.isReconnecting)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: state.isReconnecting ? const Color(0xFFFF9500) : const Color(0xFFFF3B30),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    state.isReconnecting ? Icons.sync : Icons.cloud_off_rounded,
-                    color: Colors.white,
-                    size: 16,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    state.isReconnecting
-                        ? 'Reconnecting to cloud...'
-                        : 'Operating in Offline Mode (Serving Cache)',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-            ),
+
           Expanded(
             child: Container(
               decoration: BoxDecoration(

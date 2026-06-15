@@ -16,13 +16,16 @@ class AuditScreen extends StatefulWidget {
 
 class _AuditScreenState extends State<AuditScreen> {
   String _filter = 'all';
-  final List<String> _filters = [
-    'all',
-    'created',
-    'completed',
-    'deleted',
-    'edited',
-    'snoozed',
+
+  // Filter tabs matching the reference image
+  final List<_FilterTab> _filterTabs = const [
+    _FilterTab(key: 'all', label: 'ALL'),
+    _FilterTab(key: 'created', label: 'CREATED'),
+    _FilterTab(key: 'completed', label: 'COMPLETED'),
+    _FilterTab(key: 'deleted', label: 'DELETED'),
+    _FilterTab(key: 'edited', label: 'EDITED'),
+    _FilterTab(key: 'snoozed', label: 'SNOOZED'),
+    _FilterTab(key: 'notified', label: 'NOTIFIED'),
   ];
 
   String _getPeriodRange(String period) {
@@ -46,7 +49,7 @@ class _AuditScreenState extends State<AuditScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final colors = Theme.of(context).colorScheme;
-    final logs = _filteredLogs(state.auditLogs);
+    final logs = _filteredLogs(state.auditLogs, state.auditPeriod);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -58,7 +61,8 @@ class _AuditScreenState extends State<AuditScreen> {
               padding: const EdgeInsets.fromLTRB(24, 24, 24, 0),
               child: SegmentedButton<String>(
                 style: SegmentedButton.styleFrom(
-                  backgroundColor: colors.surfaceContainerHighest.withValues(alpha: 0.1),
+                  backgroundColor:
+                      colors.surfaceContainerHighest.withValues(alpha: 0.1),
                   selectedBackgroundColor: colors.primary,
                   selectedForegroundColor: colors.onPrimary,
                   textStyle: GoogleFonts.montserrat(
@@ -99,14 +103,17 @@ class _AuditScreenState extends State<AuditScreen> {
                         color: colors.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Icon(Icons.analytics_rounded, size: 20, color: colors.primary),
+                      child: Icon(Icons.analytics_rounded,
+                          size: 20, color: colors.primary),
                     ),
                     const SizedBox(width: 12),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          state.auditPeriod == 'month' ? 'MONTHLY PERFORMANCE' : 'WEEKLY PERFORMANCE',
+                          state.auditPeriod == 'month'
+                              ? 'MONTHLY PERFORMANCE'
+                              : 'WEEKLY PERFORMANCE',
                           style: GoogleFonts.montserrat(
                             fontWeight: FontWeight.w900,
                             fontSize: 14,
@@ -117,7 +124,7 @@ class _AuditScreenState extends State<AuditScreen> {
                         Text(
                           _getPeriodRange(state.auditPeriod),
                           style: TextStyle(
-                            fontSize: 12, 
+                            fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: colors.primary,
                           ),
@@ -128,7 +135,7 @@ class _AuditScreenState extends State<AuditScreen> {
                 ),
               ),
             ),
-          
+
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
@@ -158,34 +165,39 @@ class _AuditScreenState extends State<AuditScreen> {
                   runSpacing: 16,
                   children: [
                     _AuditStat(
-                      icon: Icons.task_alt_rounded,
-                      value: '${state.analytics?.completedThisWeek ?? 0}',
-                      label: 'Done',
+                      icon: Icons.history_rounded,
+                      value: '${state.analytics?.audit['total_actions'] ?? 0}',
+                      label: 'All',
                       color: Colors.white,
+                      onTap: () => setState(() => _filter = 'all'),
                     ),
                     _AuditStat(
                       icon: Icons.add_circle_outline_rounded,
                       value: '${state.analytics?.createdThisWeek ?? 0}',
                       label: 'Added',
                       color: Colors.white.withValues(alpha: 0.9),
+                      onTap: () => setState(() => _filter = 'created'),
+                    ),
+                    _AuditStat(
+                      icon: Icons.task_alt_rounded,
+                      value: '${state.analytics?.completedThisWeek ?? 0}',
+                      label: 'Completed',
+                      color: Colors.white.withValues(alpha: 0.8),
+                      onTap: () => setState(() => _filter = 'completed'),
                     ),
                     _AuditStat(
                       icon: Icons.snooze_rounded,
                       value: '${state.analytics?.snoozedThisWeek ?? 0}',
                       label: 'Snoozed',
-                      color: Colors.white.withValues(alpha: 0.8),
-                    ),
-                    _AuditStat(
-                      icon: Icons.error_outline_rounded,
-                      value: '${state.analytics?.audit['missed_tasks'] ?? 0}',
-                      label: 'Missed',
                       color: Colors.white.withValues(alpha: 0.7),
+                      onTap: () => setState(() => _filter = 'snoozed'),
                     ),
                     _AuditStat(
-                      icon: Icons.notifications_active_rounded,
-                      value: '${state.analytics?.audit['notifications_sent'] ?? 0}',
-                      label: 'Notifs',
+                      icon: Icons.restart_alt_rounded,
+                      value: '${state.analytics?.audit['reset_events'] ?? 0}',
+                      label: 'Reset',
                       color: Colors.white.withValues(alpha: 0.6),
+                      onTap: () => setState(() => _filter = 'all'),
                     ),
                   ],
                 ),
@@ -193,30 +205,40 @@ class _AuditScreenState extends State<AuditScreen> {
             ),
           ),
 
-          // ── Filters Section ────────────────────────────────────────
+          // ── Filter Tabs (ALL / CREATED / COMPLETED / DELETED / EDITED / SNOOZED) ──
           SliverToBoxAdapter(
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
               child: Row(
-                children: _filters.map((f) {
-                  final isSelected = _filter == f;
+                children: _filterTabs.map((tab) {
+                  final isSelected = _filter == tab.key;
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
-                    child: FilterChip(
-                      label: Text(f.replaceAll('_', ' ').toUpperCase()),
-                      selected: isSelected,
-                      onSelected: (val) => setState(() => _filter = f),
-                      labelStyle: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: isSelected ? Colors.white : colors.onSurfaceVariant,
+                    child: GestureDetector(
+                      onTap: () => setState(() => _filter = tab.key),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? colors.primary
+                              : colors.surfaceContainerHighest
+                                  .withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Text(
+                          tab.label,
+                          style: GoogleFonts.montserrat(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: isSelected
+                                ? Colors.white
+                                : colors.onSurfaceVariant,
+                          ),
+                        ),
                       ),
-                      backgroundColor: colors.surfaceContainerHighest.withValues(alpha: 0.5),
-                      selectedColor: colors.primary,
-                      showCheckmark: false,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      side: BorderSide.none,
                     ),
                   );
                 }).toList(),
@@ -224,81 +246,102 @@ class _AuditScreenState extends State<AuditScreen> {
             ),
           ),
 
-          // ── Logs List ───────────────────────────────────────────────
-          if (logs.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(32),
-                      decoration: BoxDecoration(
-                        color: colors.primary.withValues(alpha: 0.05),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(Icons.auto_graph_rounded, size: 80, color: colors.primary.withValues(alpha: 0.2)),
-                    ),
-                    const SizedBox(height: 32),
-                    Text(
-                      'No Activity Records',
-                      style: GoogleFonts.outfit(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: colors.onSurface,
-                        letterSpacing: -0.5,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 48),
-                      child: Text(
-                        'Your digital footprint is currently clear. Complete tasks or interact with the AI to see your productivity audit trail.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.outfit(
-                          fontSize: 14,
-                          color: colors.onSurfaceVariant.withValues(alpha: 0.6),
-                          height: 1.5,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) => _AuditLogTile(log: logs[index], filter: _filter),
-                  childCount: logs.length,
+          // ── Logs count label ────────────────────────────────────────
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              child: Text(
+                '${logs.length} ${logs.length == 1 ? 'entry' : 'entries'}',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: colors.onSurfaceVariant,
                 ),
               ),
             ),
-          
+          ),
+
+          // ── Logs List ───────────────────────────────────────────────
+          logs.isEmpty
+              ? SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.history_rounded,
+                            size: 48,
+                            color: colors.onSurfaceVariant.withValues(alpha: 0.3)),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No logs found',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: colors.onSurfaceVariant
+                                .withValues(alpha: 0.5),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) => _AuditLogTile(
+                        log: logs[index],
+                        index: index,
+                      ),
+                      childCount: logs.length,
+                    ),
+                  ),
+                ),
+
           const SliverPadding(padding: EdgeInsets.only(bottom: 32)),
         ],
       ),
     );
   }
 
-  List<AuditLog> _filteredLogs(List<AuditLog> logs) {
-    if (_filter == 'all') return logs;
-    
-    return logs.where((log) {
-      final event = log.event.toLowerCase();
-      switch (_filter) {
-        case 'created': return event == 'task_created' || event == 'created';
-        case 'completed': return event == 'task_completed' || event == 'completed';
-        case 'deleted': return event == 'task_deleted' || event == 'deleted';
-        case 'edited': return event == 'task_edited' || event == 'edited';
-        case 'snoozed': return event == 'task_snoozed' || event == 'snoozed';
-        default: return event == _filter;
-      }
+  bool _isLogInPeriod(AuditLog log, String period) {
+    final now = DateTime.now();
+    final logDate = log.timestamp.toLocal();
+    if (period == 'month') {
+      final start = DateTime(now.year, now.month, 1);
+      final end = DateTime(now.year, now.month + 1, 1)
+          .subtract(const Duration(microseconds: 1));
+      return logDate.isAfter(start.subtract(const Duration(microseconds: 1))) &&
+          logDate.isBefore(end);
+    } else {
+      final monday = now.subtract(Duration(days: now.weekday - 1));
+      final start = DateTime(monday.year, monday.month, monday.day);
+      final end = start
+          .add(const Duration(days: 7))
+          .subtract(const Duration(microseconds: 1));
+      return logDate.isAfter(start.subtract(const Duration(microseconds: 1))) &&
+          logDate.isBefore(end);
+    }
+  }
+
+  List<AuditLog> _filteredLogs(List<AuditLog> logs, String period) {
+    final periodLogs =
+        logs.where((log) => _isLogInPeriod(log, period)).toList();
+
+    if (_filter == 'all') return periodLogs;
+
+    return periodLogs.where((log) {
+      final action = log.cleanActionName.toLowerCase();
+      return action == _filter;
     }).toList();
   }
+}
+
+class _FilterTab {
+  const _FilterTab({required this.key, required this.label});
+  final String key;
+  final String label;
 }
 
 class _AuditStat extends StatelessWidget {
@@ -307,132 +350,186 @@ class _AuditStat extends StatelessWidget {
     required this.value,
     required this.label,
     required this.color,
+    required this.onTap,
   });
 
   final IconData icon;
   final String value;
   final String label;
   final Color color;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 65,
-      child: Column(
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: GoogleFonts.montserrat(
-              fontWeight: FontWeight.w800,
-              fontSize: 18,
-              color: color,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        width: 72,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(height: 4),
+            Text(
+              value,
+              style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w800,
+                fontSize: 18,
+                color: color,
+              ),
             ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: color.withValues(alpha: 0.7),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color.withValues(alpha: 0.8),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
 class _AuditLogTile extends StatelessWidget {
-  const _AuditLogTile({required this.log, required this.filter});
+  const _AuditLogTile({required this.log, required this.index});
 
   final AuditLog log;
-  final String filter;
+  final int index;
+
+  IconData _getIcon() {
+    final action = log.cleanActionName.toLowerCase();
+    switch (action) {
+      case 'created':
+        return Icons.add_circle_rounded;
+      case 'completed':
+        return Icons.check_circle_rounded;
+      case 'snoozed':
+        return Icons.snooze_rounded;
+      case 'notified':
+        return Icons.info_rounded;
+      case 'deleted':
+        return Icons.delete_rounded;
+      case 'edited':
+        return Icons.edit_rounded;
+      case 'reset':
+        return Icons.restart_alt_rounded;
+      default:
+        return Icons.info_rounded;
+    }
+  }
+
+  Color _getColor() {
+    final action = log.cleanActionName.toLowerCase();
+    switch (action) {
+      case 'created':
+        return const Color(0xFF22C55E); // green
+      case 'completed':
+        return const Color(0xFF22C55E); // green (checkmark)
+      case 'snoozed':
+        return const Color(0xFFF59E0B); // amber
+      case 'notified':
+        return const Color(0xFF6B7280); // dark grey (info)
+      case 'deleted':
+        return const Color(0xFFEF4444); // red
+      case 'edited':
+        return const Color(0xFF3B82F6); // blue
+      case 'reset':
+        return const Color(0xFFF97316); // orange
+      default:
+        return const Color(0xFF9CA3AF); // grey
+    }
+  }
+
+  /// Returns the action label exactly like in the reference image:
+  /// "Study (Created)", "Work (Deleted)", "Sport (Completed)", etc.
+  String _buildDisplayLabel() {
+    final taskName = log.taskTitle;
+    final action = _capitalizedAction();
+
+    if (taskName.isNotEmpty &&
+        taskName != 'Untitled Task' &&
+        taskName != 'System Event') {
+      return '$taskName ($action)';
+    }
+    return action;
+  }
+
+  String _capitalizedAction() {
+    final action = log.cleanActionName;
+    if (action.isEmpty) return 'Activity';
+    return action[0].toUpperCase() + action.substring(1).toLowerCase();
+  }
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final time = DateFormat('MMM d, h:mm a').format(log.timestamp);
-
-    IconData icon;
-    Color iconColor;
-    final event = log.event.startsWith('task_') ? log.event.substring(5) : log.event;
-    switch (event) {
-      case 'created':
-        icon = Icons.add_circle_rounded;
-        iconColor = Colors.green;
-        break;
-      case 'completed':
-        icon = Icons.check_circle_rounded;
-        iconColor = Colors.green;
-        break;
-      case 'deleted':
-        icon = Icons.delete_rounded;
-        iconColor = Colors.red;
-        break;
-      case 'edited':
-        icon = Icons.edit_rounded;
-        iconColor = Colors.blue;
-        break;
-      case 'notified':
-      case 'notification_scheduled':
-        icon = Icons.notifications_active_rounded;
-        iconColor = Colors.purple;
-        break;
-      case 'missed':
-        icon = Icons.warning_amber_rounded;
-        iconColor = Colors.red;
-        break;
-      case 'snoozed':
-        icon = Icons.snooze_rounded;
-        iconColor = Colors.amber;
-        break;
-      case 'dismissed':
-        icon = Icons.cancel_rounded;
-        iconColor = Colors.grey;
-        break;
-      default:
-        icon = Icons.info_rounded;
-        iconColor = colors.onSurfaceVariant;
-    }
+    final timeStr = DateFormat('MMM d, h:mm a').format(log.timestamp.toLocal());
+    final iconColor = _getColor();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 2),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Card(
         elevation: 0,
         color: colors.surfaceContainerLowest.withValues(alpha: 0.5),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: BorderSide(color: colors.outlineVariant.withValues(alpha: 0.2)),
+          borderRadius: BorderRadius.circular(14),
+          side: BorderSide(
+              color: colors.outlineVariant.withValues(alpha: 0.2)),
         ),
-        child: ListTile(
-          visualDensity: VisualDensity.compact,
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-          leading: Icon(icon, size: 18, color: iconColor),
-          title: Text(
-            filter == 'all' ? log.eventLabel : log.taskTitle,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
-          ),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Text(
-                time,
-                style: TextStyle(fontSize: 11, color: colors.onSurfaceVariant.withValues(alpha: 0.7)),
-              ),
-              if (log.notificationScheduledAt != null || log.notificationSentAt != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    'Scheduled: ${log.notificationScheduledAt ?? "N/A"} • Sent: ${log.notificationSentAt ?? "N/A"}',
-                    style: TextStyle(fontSize: 10, color: colors.primary.withValues(alpha: 0.6)),
-                  ),
+              // Circular icon container
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  shape: BoxShape.circle,
                 ),
+                child: Center(
+                  child: Icon(_getIcon(), size: 22, color: iconColor),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _buildDisplayLabel(),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: colors.onSurface,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      timeStr,
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
-          trailing: const SizedBox.shrink(),
         ),
-      ),
-    ).animate().fadeIn(duration: 400.ms).slideX(begin: 0.05, end: 0);
+      )
+          .animate(delay: Duration(milliseconds: index * 40))
+          .fadeIn(duration: 300.ms)
+          .slideX(begin: 0.04, end: 0),
+    );
   }
 }

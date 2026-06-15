@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:timezone/data/latest_all.dart' as tz;
+import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
 import 'web_notifier_stub.dart' if (dart.library.js) 'web_notifier_web.dart'
     as web_notifier;
@@ -22,6 +22,9 @@ class NotificationService {
 
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+
+  /// Guard: only initialize plugin once.
+  bool _initialized = false;
 
   static final Int64List _vibrationPattern =
       Int64List.fromList([0, 700, 250, 700, 250, 1000]);
@@ -46,6 +49,8 @@ class NotificationService {
     showWhen: true,
     autoCancel: true,
     ticker: 'RemindMe task alert',
+    // NOTE: launcher_icon is set by flutter_launcher_icons.yaml
+    largeIcon: const DrawableResourceAndroidBitmap('@mipmap/launcher_icon'),
     actions: <AndroidNotificationAction>[
       const AndroidNotificationAction(
         'snooze',
@@ -61,46 +66,54 @@ class NotificationService {
   );
 
   Future<void> init({NotificationTapHandler? onTap}) async {
-    tz.initializeTimeZones();
-    try {
-      final String timeZoneName = DateTime.now().timeZoneName;
-      tz.setLocalLocation(tz.getLocation(timeZoneName));
-    } catch (_) {
-      tz.setLocalLocation(tz.UTC);
-    }
-
     if (kIsWeb) {
       await checkPermissions();
       return;
     }
 
-    const androidInit = AndroidInitializationSettings('@mipmap/launcher_icon');
-    const initSettings = InitializationSettings(android: androidInit);
+    // Initialize timezone database once
+    tzdata.initializeTimeZones();
+    // Always use UTC for scheduling — avoids all device-timezone mismatches.
+    // We schedule using absolute UTC instants, so tz.UTC is always correct.
+    tz.setLocalLocation(tz.UTC);
 
-    await _plugin.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: (details) {
-        onTap?.call(details.payload);
-      },
-      onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
-    );
+    // Only initialize the plugin once to avoid clearing the tap handler
+    if (!_initialized) {
+      // Use launcher_icon — the name set by flutter_launcher_icons.yaml
+      const androidInit =
+          AndroidInitializationSettings('@mipmap/launcher_icon');
+      const initSettings = InitializationSettings(android: androidInit);
 
-    final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
+      await _plugin.initialize(
+        initSettings,
+        onDidReceiveNotificationResponse: (details) {
+          debugPrint('[Notification] Tapped: payload=${details.payload}');
+          onTap?.call(details.payload);
+        },
+        onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
+      );
 
-    await androidPlugin?.createNotificationChannel(
-      AndroidNotificationChannel(
-        taskChannelId,
-        taskChannelName,
-        description: taskChannelDescription,
-        importance: Importance.max,
-        playSound: true,
-        enableVibration: true,
-        vibrationPattern: _vibrationPattern,
-        ledColor: const Color(0xFF2563EB),
-        enableLights: true,
-      ),
-    );
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+
+      await androidPlugin?.createNotificationChannel(
+        AndroidNotificationChannel(
+          taskChannelId,
+          taskChannelName,
+          description: taskChannelDescription,
+          importance: Importance.max,
+          playSound: true,
+          enableVibration: true,
+          vibrationPattern: _vibrationPattern,
+          ledColor: const Color(0xFF2563EB),
+          enableLights: true,
+        ),
+      );
+
+      _initialized = true;
+      debugPrint('[Notification] Plugin initialized successfully.');
+    }
+
     await checkPermissions();
   }
 
@@ -118,6 +131,7 @@ class NotificationService {
     if (androidPlugin != null) {
       _isPermissionGranted =
           await androidPlugin.areNotificationsEnabled() ?? false;
+      debugPrint('[Notification] areNotificationsEnabled: $_isPermissionGranted');
     }
   }
 
@@ -134,6 +148,8 @@ class NotificationService {
     if (androidPlugin != null) {
       final granted = await androidPlugin.requestNotificationsPermission();
       _isPermissionGranted = granted ?? false;
+      debugPrint('[Notification] Permission granted: $_isPermissionGranted');
+      // Request exact alarm permission (opens system settings on Android 12+)
       await androidPlugin.requestExactAlarmsPermission();
     }
   }
@@ -155,23 +171,126 @@ class NotificationService {
       );
       return;
     }
+
+    // Ensure plugin is initialized before scheduling
+    if (!_initialized) {
+      await init();
+    }
+
     final intId = id.hashCode & 0x7FFFFFFF;
-    if (scheduledDate.isBefore(DateTime.now())) return;
+
+    // Convert scheduledDate to UTC to avoid all timezone confusion
+    final scheduledUtc = scheduledDate.toUtc();
+
+    if (scheduledUtc.isBefore(DateTime.now().toUtc())) {
+      debugPrint('[Notification] Skipped past task: $title at $scheduledUtc');
+      return;
+    }
+
+    try {
+      // Schedule using UTC timezone — no device timezone conversion needed
+      final tzScheduled = tz.TZDateTime.from(scheduledUtc, tz.UTC);
+
+      try {
+        await _plugin.zonedSchedule(
+          intId,
+          title,
+          body,
+          tzScheduled,
+          NotificationDetails(android: _androidAlarmDetails),
+          androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'task:$id',
+        );
+        debugPrint('[Notification] Scheduled (exact): "$title" at $tzScheduled UTC (ID: $intId)');
+      } catch (e) {
+        debugPrint('[Notification] Exact scheduling failed, trying non-exact fallback: $e');
+        await _plugin.zonedSchedule(
+          intId,
+          title,
+          body,
+          tzScheduled,
+          NotificationDetails(android: _androidAlarmDetails),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          payload: 'task:$id',
+        );
+        debugPrint('[Notification] Scheduled (fallback): "$title" at $tzScheduled UTC (ID: $intId)');
+      }
+    } catch (e) {
+      debugPrint('[Notification] Scheduling failed for "$title": $e');
+    }
+  }
+
+  /// Fire an immediate notification.
+  Future<void> showNotification({
+    required String id,
+    required String title,
+    required String body,
+    String? payload,
+  }) async {
+    if (kIsWeb) {
+      web_notifier.showWebNotification(title, body);
+      return;
+    }
+
+    if (!_initialized) await init();
+
+    final intId = id.hashCode & 0x7FFFFFFF;
+    await _plugin.show(
+      intId,
+      title,
+      body,
+      NotificationDetails(android: _androidAlarmDetails),
+      payload: payload,
+    );
+    debugPrint('[Notification] Instant notification shown (ID: $intId).');
+  }
+
+  /// Fire an immediate test notification (shows instantly, no scheduling).
+  Future<void> sendTestNotification() async {
+    if (kIsWeb) {
+      web_notifier.sendWebTestNotification();
+      return;
+    }
+
+    if (!_initialized) await init();
+
+    await _plugin.show(
+      900001,
+      '🔔 RemindMe Test',
+      'Notifications are working! Tasks will alert you when due.',
+      NotificationDetails(android: _androidAlarmDetails),
+      payload: 'test',
+    );
+    debugPrint('[Notification] Instant test notification sent.');
+  }
+
+  /// Schedule a notification 5 seconds from now to test exact alarm delivery.
+  Future<void> sendTestScheduledNotification() async {
+    if (kIsWeb) return;
+    if (!_initialized) await init();
+
+    final fireAt = DateTime.now().toUtc().add(const Duration(seconds: 5));
+    final tzScheduled = tz.TZDateTime.from(fireAt, tz.UTC);
+
     try {
       await _plugin.zonedSchedule(
-        intId,
-        title,
-        body,
-        tz.TZDateTime.from(scheduledDate, tz.local),
+        900002,
+        '⏰ RemindMe Alarm Test',
+        'Exact alarm is working! Tasks will alert you on time.',
+        tzScheduled,
         NotificationDetails(android: _androidAlarmDetails),
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        payload: 'task:$id',
+        payload: 'test_scheduled',
       );
-      debugPrint('Notification scheduled: ID $id at $scheduledDate');
+      debugPrint('[Notification] 5-second test alarm scheduled at $tzScheduled');
     } catch (e) {
-      debugPrint('Notification scheduling failed: $e');
+      debugPrint('[Notification] 5-second test scheduling failed: $e');
     }
   }
 
@@ -181,22 +300,7 @@ class NotificationService {
       return;
     }
     await _plugin.cancel(id.hashCode & 0x7FFFFFFF);
-    debugPrint('Notification cancelled: ID $id');
-  }
-
-  Future<void> sendTestNotification() async {
-    if (kIsWeb) {
-      web_notifier.sendWebTestNotification();
-      return;
-    }
-
-    await _plugin.show(
-      900001,
-      'RemindMe test notification',
-      'Sound, vibration, and delivery bar are active.',
-      NotificationDetails(android: _androidAlarmDetails),
-      payload: 'test',
-    );
+    debugPrint('[Notification] Cancelled: ID $id');
   }
 
   Future<void> cancelAll() async {

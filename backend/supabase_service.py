@@ -115,6 +115,35 @@ def log_audit(user_id: str, action: str, details: str, scheduled_at: str = None,
         print(f"DEBUG ERROR in log_audit: {e}")
         logger.error(f"Error logging audit: {e}")
 
+def log_structured_audit(
+    user_id: str,
+    action: str,
+    module: str,
+    user_name: str,
+    user_email: str = "",
+    record_id: str = "",
+    previous_value: str = "",
+    new_value: str = "",
+    notes: str = "",
+    status: str = "Success",
+    scheduled_at: str = None,
+    sent_at: str = None
+):
+    """Log a structured audit event as JSON in the details column."""
+    details_dict = {
+        "user_name": user_name,
+        "user_email": user_email,
+        "action_type": action,
+        "module": module,
+        "record_id": str(record_id) if record_id else "",
+        "previous_value": str(previous_value) if previous_value else "",
+        "new_value": str(new_value) if new_value else "",
+        "status": status,
+        "notes": notes or f"{action.replace('_', ' ').title()}: {new_value}"
+    }
+    details_json = json.dumps(details_dict)
+    log_audit(user_id, action, details_json, scheduled_at=scheduled_at, sent_at=sent_at)
+
 def get_audit_logs(user_id: str, limit: int = 50) -> List[dict]:
     """Fetch audit logs from Supabase."""
     response = supabase.table("audit_logs").select("*").eq("user_id", user_id).order("created_at", desc=True).limit(limit).execute()

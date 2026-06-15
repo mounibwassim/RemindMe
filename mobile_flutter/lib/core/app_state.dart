@@ -15,6 +15,7 @@ class AppState extends ChangeNotifier {
   AppState({ThemeMode initialTheme = ThemeMode.system}) {
     themeMode = initialTheme;
     _loadSession();
+    _startForegroundScheduler();
   }
 
   // ── Configuration ────────────────────────────────────────────────────────
@@ -45,9 +46,11 @@ class AppState extends ChangeNotifier {
   bool isOffline = false;
   bool isReconnecting = false;
   bool isWarmingUp = false;
+  bool _hasDoneInitialWarmup = false;
   List<Map<String, dynamic>> _offlineMutationQueue = [];
   final Set<String> _loggedMissedTasks = {};
   final Set<String> _loggedScheduledTasks = {};
+  final Set<String> _foregroundTriggeredTasks = {};
 
   bool get isSignedIn => session != null;
   bool get isFirebaseUser => firebaseUid != null;
@@ -133,6 +136,10 @@ class AppState extends ChangeNotifier {
 
   Future<void> sendTestNotification() async {
     await _notifications.sendTestNotification();
+  }
+
+  Future<void> sendTestScheduledNotification() async {
+    await _notifications.sendTestScheduledNotification();
   }
 
   Future<void> _saveSession() async {
@@ -222,8 +229,11 @@ class AppState extends ChangeNotifier {
   // ── Warm-up Sequencer for Render Free Tier Cold Starts ────────────────────
 
   Future<void> performWarmupCheck() async {
-    isWarmingUp = true;
-    notifyListeners();
+    final showWarmup = !_hasDoneInitialWarmup;
+    if (showWarmup) {
+      isWarmingUp = true;
+      notifyListeners();
+    }
 
     final prefs = await SharedPreferences.getInstance();
     String? customUrl = prefs.getString('custom_api_url');
@@ -265,6 +275,7 @@ class AppState extends ChangeNotifier {
       if (response.statusCode == 200) {
         isWarmingUp = false;
         isOffline = false;
+        _hasDoneInitialWarmup = true;
         notifyListeners();
         debugPrint(
             'AppState: Backend connection verified. Processing offline mutations.');
@@ -277,7 +288,13 @@ class AppState extends ChangeNotifier {
       stopwatch.stop();
       debugPrint(
           'AppState: Active backend connection failed after ${stopwatch.elapsedMilliseconds}ms. Error: $e');
-      _backgroundWarmup();
+      if (showWarmup) {
+        _backgroundWarmup();
+      } else {
+        isOffline = true;
+        _hasDoneInitialWarmup = true;
+        notifyListeners();
+      }
     }
   }
 
@@ -294,6 +311,7 @@ class AppState extends ChangeNotifier {
         if (response.statusCode == 200) {
           isWarmingUp = false;
           isOffline = false;
+          _hasDoneInitialWarmup = true;
           debugPrint('AppState: Server woke up! Syncing cached state.');
           notifyListeners();
           await _processOfflineQueue();
@@ -309,6 +327,7 @@ class AppState extends ChangeNotifier {
     if (isWarmingUp) {
       isWarmingUp = false;
       isOffline = true;
+      _hasDoneInitialWarmup = true;
       notifyListeners();
     }
   }
@@ -558,8 +577,21 @@ class AppState extends ChangeNotifier {
         analytics = _calculateFallbackAnalytics(tasks);
       }
 
+      // Always enrich weekly and monthly charts using locally calculated distributions
+      if (analytics != null) {
+        final local = _calculateFallbackAnalytics(tasks);
+        analytics = analytics!.copyWith(
+          weeklyLabels: local.weeklyLabels,
+          weeklyCounts: local.weeklyCounts,
+          weeklyRange: local.weeklyRange,
+          monthlyLabels: local.monthlyLabels,
+          monthlyCounts: local.monthlyCounts,
+          monthlyRange: local.monthlyRange,
+        );
+      }
+
       try {
-        auditLogs = await api.getAuditLogs(limit: 100, period: auditPeriod);
+        auditLogs = await api.getAuditLogs(limit: 1000, period: auditPeriod);
       } catch (e) {
         debugPrint('AppState: Audit logs fetch failed: $e');
         auditLogs = [];
@@ -570,28 +602,6 @@ class AppState extends ChangeNotifier {
       debugPrint('AppState: Network sync failed. Serving cached data: $e');
       isOffline = true;
       await _loadLocalCache();
-    }
-
-    // ── Missed Task Detection ─────────────────────────────────────────────
-    final now = DateTime.now();
-    for (final task in tasks
-        .where((t) => !t.isCompleted && t.notificationStatus == 'pending')) {
-      if (task.dueAt.isBefore(now.subtract(const Duration(minutes: 1)))) {
-        if (_loggedMissedTasks.contains(task.id)) continue;
-        try {
-          if (!isOffline) {
-            _loggedMissedTasks.add(task.id);
-            await api.logNotificationEvent(
-              task.id,
-              'missed',
-              extra: 'Task "${task.title}" was missed (due at ${task.dueIso})',
-            );
-          }
-        } catch (e) {
-          _loggedMissedTasks.remove(task.id);
-          debugPrint('AppState: Failed to log missed event for ${task.id}: $e');
-        }
-      }
     }
 
     await _rescheduleNotifications();
@@ -605,19 +615,124 @@ class AppState extends ChangeNotifier {
     final upcoming =
         list.where((t) => !t.isCompleted && t.isOverdue == 0).length;
 
+    // Calculate Weekly Distribution
+    final now = DateTime.now();
+    // Find the most recent Monday
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final mondayStart = DateTime(monday.year, monday.month, monday.day);
+    final sundayEnd = mondayStart.add(const Duration(days: 7));
+
+    final weeklyLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final weeklyCounts = List<int>.filled(7, 0);
+
+    // Calculate Monthly Distribution
+    final currentMonthStart = DateTime(now.year, now.month, 1);
+    final nextMonthStart = now.month == 12
+        ? DateTime(now.year + 1, 1, 1)
+        : DateTime(now.year, now.month + 1, 1);
+    final lastDay = nextMonthStart.subtract(const Duration(days: 1)).day;
+
+    final monthlyLabels = ['W1', 'W2', 'W3', 'W4'];
+    final monthlyCounts = List<int>.filled(4, 0);
+    if (lastDay > 28) {
+      monthlyLabels.add('W5');
+      monthlyCounts.add(0);
+    }
+
+    for (final task in list) {
+      if (task.isCompleted &&
+          task.completedIso != null &&
+          task.completedIso!.isNotEmpty) {
+        try {
+          final compDt = DateTime.parse(task.completedIso!).toLocal();
+
+          // Weekly check
+          if (compDt.isAfter(mondayStart) && compDt.isBefore(sundayEnd)) {
+            final dayIndex = compDt.weekday - 1; // Mon=0, Sun=6
+            if (dayIndex >= 0 && dayIndex < 7) {
+              weeklyCounts[dayIndex]++;
+            }
+          }
+
+          // Monthly check
+          if (compDt.year == now.year && compDt.month == now.month) {
+            final day = compDt.day;
+            if (day <= 7) {
+              monthlyCounts[0]++;
+            } else if (day <= 14) {
+              monthlyCounts[1]++;
+            } else if (day <= 21) {
+              monthlyCounts[2]++;
+            } else if (day <= 28) {
+              monthlyCounts[3]++;
+            } else if (monthlyCounts.length > 4) {
+              monthlyCounts[4]++;
+            }
+          }
+        } catch (e) {
+          debugPrint('Error parsing completedIso: $e');
+        }
+      }
+    }
+
+    final monthName = _getMonthName(now.month);
+    final weeklyRangeStr =
+        "${mondayStart.day} ${_getMonthAbbr(mondayStart.month)} ${mondayStart.year} - ${sundayEnd.subtract(const Duration(days: 1)).day} ${_getMonthAbbr(sundayEnd.subtract(const Duration(days: 1)).month)} ${sundayEnd.year}";
+    final monthlyRangeStr =
+        "01 - ${lastDay.toString().padLeft(2, '0')} $monthName ${now.year}";
+
     return AnalyticsSummary(
       totalTasks: total,
       completed: completed,
       pending: pending,
       upcoming: upcoming,
-      weeklyLabels: [],
-      weeklyCounts: [],
-      weeklyRange: '',
+      weeklyLabels: weeklyLabels,
+      weeklyCounts: weeklyCounts,
+      weeklyRange: weeklyRangeStr,
+      monthlyLabels: monthlyLabels,
+      monthlyCounts: monthlyCounts,
+      monthlyRange: monthlyRangeStr,
       audit: {},
       aiInsight: isOffline
           ? 'Offline Mode active. Syncing later.'
           : 'Syncing with backend...',
     );
+  }
+
+  String _getMonthName(int month) {
+    const names = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December'
+    ];
+    return names[month - 1];
+  }
+
+  String _getMonthAbbr(int month) {
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec'
+    ];
+    return names[month - 1];
   }
 
   Future<void> createTask(TaskDraft draft) async {
@@ -648,8 +763,22 @@ class AppState extends ChangeNotifier {
           'sound': draft.sound,
           'description': draft.description,
         });
+        // Schedule notification locally for the newly created offline task
+        try {
+          await _scheduleNotificationForTask(tempTask);
+        } catch (e) {
+          debugPrint(
+              'AppState: Failed to schedule notification for temp task: $e');
+        }
       } else {
-        await api.createTask(draft);
+        final created = await api.createTask(draft);
+        // Schedule notification for the created task immediately
+        try {
+          await _scheduleNotificationForTask(created);
+        } catch (e) {
+          debugPrint(
+              'AppState: Failed to schedule notification for created task: $e');
+        }
         await _reloadData();
       }
     });
@@ -659,6 +788,7 @@ class AppState extends ChangeNotifier {
     await _guard(() async {
       _loggedMissedTasks.remove(id);
       _loggedScheduledTasks.remove(id);
+      _foregroundTriggeredTasks.remove(id);
       if (isOffline) {
         final idx = tasks.indexWhere((t) => t.id == id);
         if (idx != -1) {
@@ -686,8 +816,22 @@ class AppState extends ChangeNotifier {
           'sound': draft.sound,
           'description': draft.description,
         });
+        // Reschedule notification for updated task in offline mode
+        try {
+          final idx = tasks.indexWhere((t) => t.id == id);
+          if (idx != -1) await _scheduleNotificationForTask(tasks[idx]);
+        } catch (e) {
+          debugPrint(
+              'AppState: Failed to reschedule notification for updated task: $e');
+        }
       } else {
-        await api.updateTask(id, draft);
+        final updated = await api.updateTask(id, draft);
+        try {
+          await _scheduleNotificationForTask(updated);
+        } catch (e) {
+          debugPrint(
+              'AppState: Failed to reschedule notification for updated task (online): $e');
+        }
         await _reloadData();
       }
     });
@@ -695,6 +839,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> completeTask(TaskItem task) async {
     await _guard(() async {
+      await _notifications.cancelNotification(task.id);
       if (isOffline) {
         final idx = tasks.indexWhere((t) => t.id == task.id);
         if (idx != -1) {
@@ -727,6 +872,9 @@ class AppState extends ChangeNotifier {
     await _guard(() async {
       _loggedMissedTasks.remove(task.id);
       _loggedScheduledTasks.remove(task.id);
+      if (!task.isCompleted) {
+        await _notifications.cancelNotification(task.id);
+      }
       if (isOffline) {
         final isComp = task.isCompleted;
         final idx = tasks.indexWhere((t) => t.id == task.id);
@@ -765,6 +913,7 @@ class AppState extends ChangeNotifier {
     await _guard(() async {
       _loggedMissedTasks.remove(task.id);
       _loggedScheduledTasks.remove(task.id);
+      _foregroundTriggeredTasks.remove(task.id);
       if (isOffline) {
         final idx = tasks.indexWhere((t) => t.id == task.id);
         if (idx != -1) {
@@ -787,6 +936,14 @@ class AppState extends ChangeNotifier {
           await _saveLocalCache();
         }
         await _addToOfflineQueue('snooze', {'id': task.id, 'minutes': minutes});
+        // Reschedule local notification for snoozed task
+        try {
+          final idx = tasks.indexWhere((t) => t.id == task.id);
+          if (idx != -1) await _scheduleNotificationForTask(tasks[idx]);
+        } catch (e) {
+          debugPrint(
+              'AppState: Failed to reschedule notification for snoozed task: $e');
+        }
       } else {
         await api.snoozeTask(task.id, minutes);
         await _reloadData();
@@ -796,6 +953,7 @@ class AppState extends ChangeNotifier {
 
   Future<void> deleteTask(TaskItem task) async {
     await _guard(() async {
+      await _notifications.cancelNotification(task.id);
       if (isOffline) {
         tasks.removeWhere((t) => t.id == task.id);
         await _saveLocalCache();
@@ -881,6 +1039,7 @@ class AppState extends ChangeNotifier {
       analytics = null;
       auditLogs = [];
       await _saveLocalCache();
+      await _notifications.cancelAll();
       await _reloadData();
     });
   }
@@ -919,13 +1078,13 @@ class AppState extends ChangeNotifier {
   Future<void> _rescheduleNotifications() async {
     if (!notificationsEnabled) return;
     await _notifications.init();
-    await _notifications.cancelAll();
+    // Do NOT cancelAll() here to prevent race conditions that cancel notifications
+    // immediately as they are triggered in the foreground.
 
     final now = DateTime.now();
     for (final task in tasks.where((t) => !t.isCompleted)) {
       if (task.dueAt.isAfter(now)) {
         if (task.notificationStatus == 'pending' &&
-            task.category.toLowerCase() == 'call' &&
             !_loggedScheduledTasks.contains(task.id)) {
           try {
             if (!isOffline) {
@@ -943,25 +1102,77 @@ class AppState extends ChangeNotifier {
           }
         }
 
+        // Ensure previous scheduled notification for this task is removed
+        try {
+          await _notifications.cancelNotification(task.id);
+        } catch (_) {}
+
         await _notifications.scheduleNotification(
           id: task.id,
           title: task.title,
           body: 'Alarm: ${task.title} is due now!',
           scheduledDate: task.dueAt,
           onTriggered: () {
-            _triggeredTaskController.add(task);
-            if (!isOffline) {
-              api
-                  .logNotificationEvent(task.id, 'notification_triggered')
-                  .then((_) => _reloadData())
-                  .catchError((e) {
-                debugPrint(
-                    'AppState: Failed to log notification_triggered for task ${task.id}: $e');
-              });
-            }
+            // Handled exclusively by the foreground scheduler
+            debugPrint(
+                '[Notification] Web timer fired for task: ${task.title}');
           },
         );
       }
+    }
+  }
+
+  Future<void> _scheduleNotificationForTask(TaskItem task) async {
+    if (!notificationsEnabled) return;
+    try {
+      // Ensure plugin initialized and permission requested when needed
+      await _notifications.init();
+      if (!_notifications.isPermissionGranted) {
+        await _notifications.requestPermissions();
+      }
+    } catch (e) {
+      debugPrint('AppState: Notification init/permission check failed: $e');
+    }
+
+    // Cancel any existing scheduled notification for this task first
+    try {
+      await _notifications.cancelNotification(task.id);
+    } catch (e) {
+      debugPrint(
+          'AppState: Failed to cancel existing notification for ${task.id}: $e');
+    }
+
+    if (task.isCompleted) return;
+
+    final now = DateTime.now();
+    // If due time is in the past but recent, show immediately; otherwise skip
+    if (task.dueAt.isBefore(now)) {
+      final recentThreshold = now.subtract(const Duration(minutes: 5));
+      if (task.dueAt.isAfter(recentThreshold)) {
+        await _notifications.showNotification(
+          id: task.id,
+          title: task.title,
+          body: 'Reminder: ${task.title}',
+          payload: 'task:${task.id}',
+        );
+        return;
+      }
+      return;
+    }
+
+    try {
+      await _notifications.scheduleNotification(
+        id: task.id,
+        title: task.title,
+        body: 'Reminder: ${task.title}',
+        scheduledDate: task.dueAt,
+        onTriggered: () {
+          debugPrint('[Notification] Scheduled fired for task: ${task.title}');
+        },
+      );
+    } catch (e) {
+      debugPrint(
+          'AppState: Failed to schedule notification for ${task.id}: $e');
     }
   }
 
@@ -1051,8 +1262,10 @@ class AppState extends ChangeNotifier {
     analytics = null;
     auditLogs = [];
     errorMessage = null;
+    _hasDoneInitialWarmup = false;
     _loggedMissedTasks.clear();
     _loggedScheduledTasks.clear();
+    _foregroundTriggeredTasks.clear();
     _saveSession();
     notifyListeners();
   }
@@ -1102,8 +1315,69 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  Timer? _foregroundSchedulerTimer;
+
+  void _startForegroundScheduler() {
+    if (_foregroundSchedulerTimer != null) return;
+    _foregroundSchedulerTimer =
+        Timer.periodic(const Duration(seconds: 4), (timer) async {
+      if (!isSignedIn) return;
+      final now = DateTime.now();
+      bool statusChanged = false;
+
+      for (int i = 0; i < tasks.length; i++) {
+        final task = tasks[i];
+        if (!task.isCompleted &&
+            task.dueAt.isBefore(now) &&
+            task.dueAt.isAfter(now.subtract(const Duration(seconds: 90))) &&
+            task.notificationStatus == 'pending' &&
+            !_foregroundTriggeredTasks.contains(task.id)) {
+          _foregroundTriggeredTasks.add(task.id);
+          debugPrint('[Foreground Scheduler] Triggering task: ${task.title}');
+
+          // 1. Trigger in-app popup dialog via the stream
+          _triggeredTaskController.add(task);
+
+          // 3. Mark locally as triggered to avoid double fires
+          tasks[i] = TaskItem(
+            id: task.id,
+            title: task.title,
+            dueIso: task.dueIso,
+            priority: task.priority,
+            notified: 1,
+            category: task.category,
+            sound: task.sound,
+            description: task.description,
+            isOverdue: task.isOverdue,
+            createdIso: task.createdIso,
+            status: task.status,
+            completedIso: task.completedIso,
+            notificationStatus: 'triggered',
+          );
+          statusChanged = true;
+
+          // 4. Log to backend
+          if (!isOffline) {
+            try {
+              await api.logNotificationEvent(task.id, 'notification_triggered');
+              // Automatically reload data to fetch latest tasks status
+              _reloadData();
+            } catch (e) {
+              debugPrint('[Foreground Scheduler] Failed to log event: $e');
+            }
+          }
+        }
+      }
+
+      if (statusChanged) {
+        notifyListeners();
+      }
+    });
+  }
+
   @override
   void dispose() {
+    _foregroundSchedulerTimer?.cancel();
     _triggeredTaskController.close();
     super.dispose();
   }

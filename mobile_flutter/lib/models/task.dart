@@ -186,11 +186,11 @@ class TaskItem {
 
   factory TaskItem.fromJson(Map<String, dynamic> json) {
     return TaskItem(
-      id: json['id'].toString(),
-      title: json['title'] as String,
-      dueIso: json['due_iso'] as String,
-      priority: json['priority'] as int,
-      notified: json['notified'] as int,
+      id: json['id']?.toString() ?? '',
+      title: json['title'] as String? ?? 'Untitled',
+      dueIso: json['due_iso'] as String? ?? '',
+      priority: json['priority'] as int? ?? 2,
+      notified: json['notified'] as int? ?? 0,
       createdIso: json['created_iso'] as String?,
       completedIso: json['completed_iso'] as String?,
       category: json['category'] as String? ?? 'General',
@@ -207,11 +207,15 @@ class TaskItem {
         'title': title,
         'due_iso': dueIso,
         'priority': priority,
+        'notified': notified,
+        'created_iso': createdIso,
+        'completed_iso': completedIso,
         'category': category,
         'sound': sound,
         'description': description,
-        'completed_iso': completedIso,
         'is_overdue': isOverdue,
+        'status': status,
+        'notification_status': notificationStatus,
       };
 }
 

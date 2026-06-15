@@ -7,6 +7,9 @@ class AnalyticsSummary {
     required this.weeklyLabels,
     required this.weeklyCounts,
     required this.weeklyRange,
+    required this.monthlyLabels,
+    required this.monthlyCounts,
+    required this.monthlyRange,
     required this.audit,
     this.completionRate = 0.0,
     this.aiInsight = '',
@@ -22,6 +25,9 @@ class AnalyticsSummary {
   final List<String> weeklyLabels;
   final List<int> weeklyCounts;
   final String weeklyRange;
+  final List<String> monthlyLabels;
+  final List<int> monthlyCounts;
+  final String monthlyRange;
   final Map<String, dynamic> audit;
   final double completionRate;
   final String aiInsight;
@@ -46,6 +52,9 @@ class AnalyticsSummary {
     List<String>? weeklyLabels,
     List<int>? weeklyCounts,
     String? weeklyRange,
+    List<String>? monthlyLabels,
+    List<int>? monthlyCounts,
+    String? monthlyRange,
     Map<String, dynamic>? audit,
     double? completionRate,
     String? aiInsight,
@@ -61,6 +70,9 @@ class AnalyticsSummary {
       weeklyLabels: weeklyLabels ?? this.weeklyLabels,
       weeklyCounts: weeklyCounts ?? this.weeklyCounts,
       weeklyRange: weeklyRange ?? this.weeklyRange,
+      monthlyLabels: monthlyLabels ?? this.monthlyLabels,
+      monthlyCounts: monthlyCounts ?? this.monthlyCounts,
+      monthlyRange: monthlyRange ?? this.monthlyRange,
       audit: audit ?? this.audit,
       completionRate: completionRate ?? this.completionRate,
       aiInsight: aiInsight ?? this.aiInsight,
@@ -79,6 +91,9 @@ class AnalyticsSummary {
       weeklyLabels: List<String>.from(json['weekly_labels'] as List? ?? []),
       weeklyCounts: List<int>.from(json['weekly_counts'] as List? ?? []),
       weeklyRange: json['weekly_range'] as String? ?? '',
+      monthlyLabels: List<String>.from(json['monthly_labels'] as List? ?? []),
+      monthlyCounts: List<int>.from(json['monthly_counts'] as List? ?? []),
+      monthlyRange: json['monthly_range'] as String? ?? '',
       audit: Map<String, dynamic>.from(json['audit'] as Map? ?? {}),
       completionRate: (json['completion_rate'] as num?)?.toDouble() ?? 0.0,
       aiInsight: json['ai_insight'] as String? ?? '',
@@ -96,6 +111,9 @@ class AnalyticsSummary {
         'weekly_labels': weeklyLabels,
         'weekly_counts': weeklyCounts,
         'weekly_range': weeklyRange,
+        'monthly_labels': monthlyLabels,
+        'monthly_counts': monthlyCounts,
+        'monthly_range': monthlyRange,
         'audit': audit,
         'completion_rate': completionRate,
         'ai_insight': aiInsight,

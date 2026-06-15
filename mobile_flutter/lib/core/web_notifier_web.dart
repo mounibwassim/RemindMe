@@ -148,3 +148,25 @@ void cancelAllWebNotifications() {
   _webNotificationTimers.clear();
   debugPrint('WebNotifierWeb: Cancelled all timers');
 }
+
+void showWebNotification(String title, String body) {
+  try {
+    final jsNotification = js.context['Notification'];
+    if (jsNotification != null) {
+      final String permission = jsNotification['permission'] as String;
+      if (permission == 'granted') {
+        final cleanTitle = title.replaceAll('"', '\\"');
+        final cleanBody = body.replaceAll('"', '\\"');
+        js.context.callMethod('eval', [
+          'new Notification("$cleanTitle", { body: "$cleanBody" })'
+        ]);
+        debugPrint('WebNotifierWeb: Custom web notification triggered: $title');
+      } else {
+        debugPrint(
+            'WebNotifierWeb: Custom web notification ignored because permission is $permission');
+      }
+    }
+  } catch (e) {
+    debugPrint('WebNotifierWeb: Error sending custom notification: $e');
+  }
+}
