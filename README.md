@@ -6,7 +6,7 @@
 [![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![Platform](https://img.shields.io/badge/Platform-Android%20%7C%20iOS%20%7C%20Windows%20%7C%20Web-blue)](#)
 
-A production-grade, highly resilient **Task Reminder Application** featuring a cross-platform **Flutter** client and high-performance **FastAPI** backend with cloud database synchronization, user isolation, and robust offline-first capabilities.
+A production-grade, highly resilient **Task Reminder Application** built with a cross-platform **Flutter** client and a high-performance **FastAPI** backend featuring cloud database synchronization, user isolation, and robust offline-first capabilities.
 
 ---
 
@@ -48,41 +48,47 @@ A production-grade, highly resilient **Task Reminder Application** featuring a c
 
 ```text
 RemindMe/
-├── mobile_flutter/          # Flutter Frontend (Material 3, Provider)
-│   ├── lib/
-│   │   ├── main.dart        # Flutter entry point
-│   │   ├── app.dart         # Main App routing & theme config
-│   │   ├── core/            # AppState, ApiClient, NotificationService, WebNotifier
-│   │   ├── models/          # Task, AnalyticsSummary, AuditLog, Session, AssistantReply
-│   │   └── screens/         # Login, Home, Tasks, Dashboard, Calendar, History, Settings, Assistant, Audit, Warmup
-│   ├── assets/              # Logos, custom avatar assets
-│   ├── pubspec.yaml         # Dependencies (shared_preferences, http, provider, etc.)
-│   └── web/                 # Web assets and manifest configurations
-│
-├── backend_api/             # FastAPI Python Server
-│   ├── app/
-│   │   ├── main.py          # FastAPI application init and CORS middleware
-│   │   ├── schemas.py       # Pydantic schemas (TaskDraft, Auth, Analytics)
-│   │   ├── deps.py          # Dependency injection helpers
-│   │   ├── routers/         # Auth, Tasks, Assistant, Analytics, System endpoints
-│   │   └── services/        # TaskService, SessionStore, AnalyticsService, AssistantService, InsightsService
-│   ├── Dockerfile           # Docker image definition for production hosting
-│   ├── requirements.txt     # Python requirements (fastapi, supabase, pydantic, pycryptodome)
-│   └── .env                 # Environment secrets (Supabase API credentials, SMTP config)
-│
-├── backend/                 # Shared Core Python Library
-│   ├── supabase_service.py  # Supabase client execution (CRUD for tasks, logs, analytics)
-│   ├── supabase_auth.py     # Auth integrations and password reset fallback
-│   ├── ai_assistant.py      # Local NLP parser logic
-│   ├── email_service.py     # SMTP / Brevo / Resend client for OTP dispatch
-│   ├── otp_store.py         # Local SQLite / In-memory storage for auth verification codes
+├── backend/                 # Shared core Python library (Auth, DB, NLP parsing)
+│   ├── ai_assistant.py      # Local regex-based NLP parser
+│   ├── audit.py             # Event audit logger
+│   ├── auth_service.py      # Core authentication logic
+│   ├── config.py            # Global environment configuration
 │   ├── crypto.py            # Local AES encryption utilities
-│   └── stats_service.py     # Stats/analytics calculation
+│   ├── email_service.py     # SMTP/Brevo/Resend email service client
+│   ├── otp_store.py         # SQLite & in-memory OTP verification store
+│   ├── stats_service.py     # Task completion metrics calculations
+│   ├── storage.py           # Encrypted local storage interface
+│   ├── supabase_auth.py     # Supabase Auth client & helper functions
+│   └── supabase_service.py  # Supabase client execution (CRUD for tasks & logs)
 │
-├── run_backend.ps1          # ▶ script to activate venv and spin up FastAPI server
-├── run_flutter.ps1          # ▶ script to spin up the Flutter UI client
-├── reset_db.ps1             # ▶ utility to purge and format local databases
-└── render.yaml              # Blueprint file to instantly spin up deployment on Render
+├── backend_api/             # FastAPI Web API Server
+│   ├── app/
+│   │   ├── main.py          # FastAPI application entry & CORS middleware
+│   │   ├── schemas.py       # Pydantic data schemas
+│   │   ├── deps.py          # Route dependencies
+│   │   ├── routers/         # Routes: auth, tasks, assistant, analytics, system
+│   │   └── services/        # Services: task, session_store, analytics, assistant, insights
+│   ├── requirements.txt     # Python requirements
+│   └── .env                 # API keys & database secrets
+│
+├── mobile_flutter/          # Cross-platform Flutter Client
+│   ├── lib/
+│   │   ├── main.dart        # Flutter main execution entry point
+│   │   ├── app.dart         # Routing & multi-theme configurations
+│   │   ├── core/            # AppState, ApiClient, NotificationService
+│   │   ├── models/          # Task, AnalyticsSummary, AuditLog, Session, AssistantReply
+│   │   └── screens/         # Screens (Login, Home, Tasks, Calendar, Dashboard, History, Settings, Assistant, Audit, Warmup)
+│   ├── assets/              # App images & customizable avatars
+│   └── pubspec.yaml         # Dart dependencies configuration
+│
+├── docs/                    # Architecture & Setup Documentation
+│   ├── flutter_python_migration.md
+│   ├── mailtrap_setup.md
+│   └── production_email_setup.md
+│
+├── reset_db.ps1             # ▶ Utility to wipe and reset debug databases
+├── run_backend.ps1          # ▶ Utility to activate .venv and run the FastAPI server
+└── run_flutter.ps1          # ▶ Utility to compile and launch the Flutter app
 ```
 
 ---
@@ -132,22 +138,11 @@ The Flutter app will open in your browser or as a native Windows desktop client.
 
 ---
 
-## 🐳 Production Deployment
-
-### Docker Deployment
-The backend includes a fully optimized `Dockerfile` in `backend_api/` for containerized environments. To build and run the API server container locally:
-
-```bash
-# Build the Docker image from root workspace
-docker build -f backend_api/Dockerfile -t remindme-backend .
-
-# Run the container
-docker run -p 8000:8000 --env-file backend_api/.env remindme-backend
-```
+## 🚀 Production Deployment
 
 ### Render Deployment
 This repository is configured for instant hosting on Render using the `render.yaml` blueprint. Adding this repository to Render will automatically spin up:
-1. A **Web Service** container built from `backend_api/Dockerfile`.
+1. A **Web Service** container.
 2. Necessary configuration mappings to link environment variables.
 
 ---
