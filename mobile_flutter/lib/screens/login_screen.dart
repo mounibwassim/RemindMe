@@ -54,7 +54,7 @@ class _LoginScreenState extends State<LoginScreen>
     final controller = TextEditingController(text: state.api.baseUrl);
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         title: const Text('Configure API Server'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
@@ -82,15 +82,29 @@ class _LoginScreenState extends State<LoginScreen>
           FilledButton(
             onPressed: () async {
               final url = controller.text.trim();
-              await state.changeApiBaseUrl(url);
-              if (context.mounted) {
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('API Server updated to: ${state.api.baseUrl}'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
+              // Close the dialog first so we don't attempt to use the dialog's
+              // (possibly deactivated) context after awaiting.
+              Navigator.pop(ctx);
+              try {
+                await state.changeApiBaseUrl(url);
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content:
+                          Text('API Server updated to: ${state.api.baseUrl}'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to update API server: $e'),
+                      backgroundColor: Colors.redAccent,
+                    ),
+                  );
+                }
               }
             },
             child: const Text('Save'),
@@ -124,7 +138,11 @@ class _LoginScreenState extends State<LoginScreen>
                       // ── Logo / Branding ───────────────────────────────────
                       Hero(
                         tag: 'logo',
-                        child: _buildLogo(colors),
+                        child: GestureDetector(
+                          onLongPress: () =>
+                              _showServerConfigDialog(context, state),
+                          child: _buildLogo(colors),
+                        ),
                       ).animate().fadeIn(duration: 800.ms).scale(delay: 200.ms),
                       const SizedBox(height: 16),
                       Text(
@@ -709,7 +727,8 @@ class _ForgotPasswordScreenState extends State<_ForgotPasswordScreen> {
                           const Expanded(
                             child: Text(
                               'Recovery code sent! Check your inbox and spam folder.',
-                              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                              style: TextStyle(
+                                  fontSize: 13, fontWeight: FontWeight.w500),
                             ),
                           ),
                         ],
@@ -963,13 +982,15 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
       if (mounted) {
         String msg;
         if (e is ConnectionException) {
-          msg = 'Connection error. Please verify the backend server is running.';
+          msg =
+              'Connection error. Please verify the backend server is running.';
         } else {
           final rawMsg = e.toString();
           if (rawMsg.contains('getaddrinfo') ||
               rawMsg.contains('SocketException') ||
               rawMsg.contains('Failed host lookup')) {
-            msg = 'Database connection error. Please make sure the Supabase database is active/unpaused.';
+            msg =
+                'Database connection error. Please make sure the Supabase database is active/unpaused.';
           } else {
             msg = rawMsg;
             if (msg.startsWith('Reset failed:')) {
@@ -1108,4 +1129,3 @@ class _ResetPasswordScreenState extends State<_ResetPasswordScreen> {
     );
   }
 }
-

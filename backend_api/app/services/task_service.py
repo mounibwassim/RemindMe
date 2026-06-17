@@ -100,13 +100,15 @@ def _row_to_task(session: UserSession, row) -> TaskResponse:
         title=title,
         due_iso=due_iso or "",
         priority=priority,
-        notified=0,
+        notified=row.get("notified", 0),
         created_iso=created_iso,
         completed_iso=row.get("updated_at") if is_completed else None,
         category=category,
         description=desc,
         status="completed" if is_completed else "open",
         is_overdue=is_overdue,
+        sound=row.get("sound", "Default"),
+        notification_status=row.get("notification_status", "pending"),
     )
 
 

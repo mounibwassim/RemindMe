@@ -52,6 +52,7 @@ class AppState extends ChangeNotifier {
   final Set<String> _loggedScheduledTasks = {};
   final Set<String> _foregroundTriggeredTasks = {};
 
+
   bool get isSignedIn => session != null;
   bool get isFirebaseUser => firebaseUid != null;
   bool get isEncryptionActive => session != null;
@@ -216,6 +217,8 @@ class AppState extends ChangeNotifier {
       if (analytics != null) {
         await prefs.setString(
             'cached_analytics', jsonEncode(analytics!.toJson()));
+      } else {
+        await prefs.remove('cached_analytics');
       }
       await prefs.setString('cached_audit_logs',
           jsonEncode(auditLogs.map((a) => a.toJson()).toList()));
@@ -381,6 +384,8 @@ class AppState extends ChangeNotifier {
                 sound: data['sound'] ?? 'Default',
                 description: data['description'] ?? '',
               ));
+        } else if (action == 'clear_all') {
+          await api.clearAllTasks();
         } else if (action == 'complete') {
           await api.completeTask(data['id']);
         } else if (action == 'reopen') {
@@ -395,6 +400,7 @@ class AppState extends ChangeNotifier {
       isReconnecting = false;
       notifyListeners();
       await _reloadData();
+
     } catch (e) {
       debugPrint(
           'AppState: Failed to process offline queue, returning items to queue: $e');
@@ -504,27 +510,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> confirmPasswordReset(String code, String password,
-      {String? email}) async {
-    isLoading = true;
-    errorMessage = null;
-    notifyListeners();
-    try {
-      await api.confirmPasswordReset(code, password, email: email);
-    } catch (e) {
-      rethrow;
-    } finally {
-      isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  void clearError() {
-    errorMessage = null;
-    successMessage = null;
-    notifyListeners();
-  }
-
   Future<void> updateAvatar(String avatar) async {
     await _guard(() async {
       await api.updateAvatar(avatar);
@@ -545,6 +530,30 @@ class AppState extends ChangeNotifier {
       await api.changePassword(currentPassword, newPassword);
     } catch (e) {
       // Propagate the error so callers (UI) can handle it explicitly.
+      rethrow;
+    } finally {
+      isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  void clearError() {
+    errorMessage = null;
+    successMessage = null;
+    notifyListeners();
+  }
+
+  Future<void> confirmPasswordReset(String code, String password,
+      {String? email}) async {
+    isLoading = true;
+    errorMessage = null;
+    notifyListeners();
+    try {
+      await api.confirmPasswordReset(code, password, email: email);
+      successMessage = 'Password updated successfully';
+      errorMessage = null;
+      notifyListeners();
+    } catch (e) {
       rethrow;
     } finally {
       isLoading = false;
@@ -580,7 +589,14 @@ class AppState extends ChangeNotifier {
       // Always enrich weekly and monthly charts using locally calculated distributions
       if (analytics != null) {
         final local = _calculateFallbackAnalytics(tasks);
+        // Preserve server-provided audit/ai fields but prefer local task
+        // counts (total/completed/pending/upcoming) and local distributions
+        // so the UI reflects immediate user actions.
         analytics = analytics!.copyWith(
+          totalTasks: local.totalTasks,
+          completed: local.completed,
+          pending: local.pending,
+          upcoming: local.upcoming,
           weeklyLabels: local.weeklyLabels,
           weeklyCounts: local.weeklyCounts,
           weeklyRange: local.weeklyRange,
@@ -605,6 +621,7 @@ class AppState extends ChangeNotifier {
     }
 
     await _rescheduleNotifications();
+    notifyListeners();
   }
 
   /// Instantly recalculates analytics from the current local tasks list and
@@ -628,19 +645,22 @@ class AppState extends ChangeNotifier {
     } else {
       analytics = local;
     }
+    _saveLocalCache();
     notifyListeners();
   }
 
   AnalyticsSummary _calculateFallbackAnalytics(List<TaskItem> list) {
     final total = list.length;
     final completed = list.where((t) => t.isCompleted).length;
+    // Compute pending/upcoming based on actual due times rather than the
+    // `isOverdue` flag which may lag behind when tasks are edited locally.
+    final now = DateTime.now();
     final pending =
-        list.where((t) => !t.isCompleted && t.isOverdue == 1).length;
+        list.where((t) => !t.isCompleted && t.dueAt.isBefore(now)).length;
     final upcoming =
-        list.where((t) => !t.isCompleted && t.isOverdue == 0).length;
+        list.where((t) => !t.isCompleted && !t.dueAt.isBefore(now)).length;
 
     // Calculate Weekly Distribution
-    final now = DateTime.now();
     // Find the most recent Monday
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final mondayStart = DateTime(monday.year, monday.month, monday.day);
@@ -657,7 +677,7 @@ class AppState extends ChangeNotifier {
     final lastDay = nextMonthStart.subtract(const Duration(days: 1)).day;
 
     final monthlyLabels = ['W1', 'W2', 'W3', 'W4'];
-    final monthlyCounts = List<int>.filled(4, 0);
+    final monthlyCounts = List<int>.filled(4, 0, growable: true);
     if (lastDay > 28) {
       monthlyLabels.add('W5');
       monthlyCounts.add(0);
@@ -797,19 +817,15 @@ class AppState extends ChangeNotifier {
         }
       } else {
         final created = await api.createTask(draft);
-        // Optimistically add task to list and refresh analytics immediately
         tasks.insert(0, created);
         tasks = _sortTasks(tasks);
-        _refreshAnalyticsFromTasks(); // ← instant dashboard update
-        // Schedule notification for the created task immediately
         try {
           await _scheduleNotificationForTask(created);
         } catch (e) {
           debugPrint(
               'AppState: Failed to schedule notification for created task: $e');
         }
-        // Full server sync in background
-        _reloadData();
+        await _reloadData();
       }
     });
   }
@@ -836,7 +852,7 @@ class AppState extends ChangeNotifier {
           );
           tasks = _sortTasks(tasks);
           await _saveLocalCache();
-          _refreshAnalyticsFromTasks(); // ← instant dashboard update
+          _refreshAnalyticsFromTasks();
         }
         await _addToOfflineQueue('update', {
           'id': id,
@@ -847,7 +863,6 @@ class AppState extends ChangeNotifier {
           'sound': draft.sound,
           'description': draft.description,
         });
-        // Reschedule notification for updated task in offline mode
         try {
           final idx = tasks.indexWhere((t) => t.id == id);
           if (idx != -1) await _scheduleNotificationForTask(tasks[idx]);
@@ -857,21 +872,13 @@ class AppState extends ChangeNotifier {
         }
       } else {
         final updated = await api.updateTask(id, draft);
-        // Optimistically update local task and refresh dashboard immediately
-        final idx = tasks.indexWhere((t) => t.id == id);
-        if (idx != -1) {
-          tasks[idx] = updated;
-          tasks = _sortTasks(tasks);
-          _refreshAnalyticsFromTasks(); // ← instant dashboard update
-        }
         try {
           await _scheduleNotificationForTask(updated);
         } catch (e) {
           debugPrint(
               'AppState: Failed to reschedule notification for updated task (online): $e');
         }
-        // Full server sync in background
-        _reloadData();
+        await _reloadData();
       }
     });
   }
@@ -879,33 +886,31 @@ class AppState extends ChangeNotifier {
   Future<void> completeTask(TaskItem task) async {
     await _guard(() async {
       await _notifications.cancelNotification(task.id);
-      // Optimistically mark complete locally for instant UI update
-      final idx = tasks.indexWhere((t) => t.id == task.id);
-      if (idx != -1) {
-        tasks[idx] = TaskItem(
-          id: task.id,
-          title: task.title,
-          dueIso: task.dueIso,
-          priority: task.priority,
-          notified: task.notified,
-          category: task.category,
-          sound: task.sound,
-          description: task.description,
-          isOverdue: 0,
-          createdIso: task.createdIso,
-          status: 'completed',
-          completedIso: DateTime.now().toIso8601String(),
-        );
-        tasks = _sortTasks(tasks);
-        await _saveLocalCache();
-        _refreshAnalyticsFromTasks(); // ← instant dashboard update
-      }
       if (isOffline) {
+        final idx = tasks.indexWhere((t) => t.id == task.id);
+        if (idx != -1) {
+          tasks[idx] = TaskItem(
+            id: task.id,
+            title: task.title,
+            dueIso: task.dueIso,
+            priority: task.priority,
+            notified: task.notified,
+            category: task.category,
+            sound: task.sound,
+            description: task.description,
+            isOverdue: 0,
+            createdIso: task.createdIso,
+            status: 'completed',
+            completedIso: DateTime.now().toIso8601String(),
+          );
+          tasks = _sortTasks(tasks);
+          await _saveLocalCache();
+          _refreshAnalyticsFromTasks(); // ← instant dashboard update
+        }
         await _addToOfflineQueue('complete', {'id': task.id});
       } else {
         await api.completeTask(task.id);
-        // Full server sync in background
-        _reloadData();
+        await _reloadData();
       }
     });
   }
@@ -918,28 +923,27 @@ class AppState extends ChangeNotifier {
       if (!isComp) {
         await _notifications.cancelNotification(task.id);
       }
-      // Optimistically toggle locally for instant UI update
-      final idx = tasks.indexWhere((t) => t.id == task.id);
-      if (idx != -1) {
-        tasks[idx] = TaskItem(
-          id: task.id,
-          title: task.title,
-          dueIso: task.dueIso,
-          priority: task.priority,
-          notified: task.notified,
-          category: task.category,
-          sound: task.sound,
-          description: task.description,
-          isOverdue: 0,
-          createdIso: task.createdIso,
-          status: isComp ? 'open' : 'completed',
-          completedIso: isComp ? null : DateTime.now().toIso8601String(),
-        );
-        tasks = _sortTasks(tasks);
-        await _saveLocalCache();
-        _refreshAnalyticsFromTasks(); // ← instant dashboard update
-      }
       if (isOffline) {
+        final idx = tasks.indexWhere((t) => t.id == task.id);
+        if (idx != -1) {
+          tasks[idx] = TaskItem(
+            id: task.id,
+            title: task.title,
+            dueIso: task.dueIso,
+            priority: task.priority,
+            notified: task.notified,
+            category: task.category,
+            sound: task.sound,
+            description: task.description,
+            isOverdue: 0,
+            createdIso: task.createdIso,
+            status: isComp ? 'open' : 'completed',
+            completedIso: isComp ? null : DateTime.now().toIso8601String(),
+          );
+          tasks = _sortTasks(tasks);
+          await _saveLocalCache();
+          _refreshAnalyticsFromTasks();
+        }
         await _addToOfflineQueue(
             isComp ? 'reopen' : 'complete', {'id': task.id});
       } else {
@@ -948,8 +952,7 @@ class AppState extends ChangeNotifier {
         } else {
           await api.completeTask(task.id);
         }
-        // Full server sync in background
-        _reloadData();
+        await _reloadData();
       }
     });
   }
@@ -959,31 +962,30 @@ class AppState extends ChangeNotifier {
       _loggedMissedTasks.remove(task.id);
       _loggedScheduledTasks.remove(task.id);
       _foregroundTriggeredTasks.remove(task.id);
-      // Optimistically update locally for instant UI update
-      final idx = tasks.indexWhere((t) => t.id == task.id);
-      if (idx != -1) {
-        final newDue = DateTime.now().add(Duration(minutes: minutes));
-        tasks[idx] = TaskItem(
-          id: task.id,
-          title: task.title,
-          dueIso: newDue.toIso8601String(),
-          priority: task.priority,
-          notified: 0,
-          category: task.category,
-          sound: task.sound,
-          description: task.description,
-          isOverdue: 0,
-          createdIso: task.createdIso,
-          status: 'snoozed',
-          notificationStatus: 'snoozed',
-        );
-        tasks = _sortTasks(tasks);
-        await _saveLocalCache();
-        _refreshAnalyticsFromTasks(); // ← instant dashboard update
-      }
+
       if (isOffline) {
+        final idx = tasks.indexWhere((t) => t.id == task.id);
+        if (idx != -1) {
+          final newDue = DateTime.now().add(Duration(minutes: minutes));
+          tasks[idx] = TaskItem(
+            id: task.id,
+            title: task.title,
+            dueIso: newDue.toIso8601String(),
+            priority: task.priority,
+            notified: 0,
+            category: task.category,
+            sound: task.sound,
+            description: task.description,
+            isOverdue: 0,
+            createdIso: task.createdIso,
+            status: 'snoozed',
+            notificationStatus: 'snoozed',
+          );
+          tasks = _sortTasks(tasks);
+          await _saveLocalCache();
+          _refreshAnalyticsFromTasks();
+        }
         await _addToOfflineQueue('snooze', {'id': task.id, 'minutes': minutes});
-        // Reschedule local notification for snoozed task
         try {
           final i = tasks.indexWhere((t) => t.id == task.id);
           if (i != -1) await _scheduleNotificationForTask(tasks[i]);
@@ -993,8 +995,7 @@ class AppState extends ChangeNotifier {
         }
       } else {
         await api.snoozeTask(task.id, minutes);
-        // Full server sync in background
-        _reloadData();
+        await _reloadData();
       }
     });
   }
@@ -1002,16 +1003,18 @@ class AppState extends ChangeNotifier {
   Future<void> deleteTask(TaskItem task) async {
     await _guard(() async {
       await _notifications.cancelNotification(task.id);
-      // Remove locally immediately for instant UI update
-      tasks.removeWhere((t) => t.id == task.id);
-      await _saveLocalCache();
-      _refreshAnalyticsFromTasks(); // ← instant dashboard update
+
       if (isOffline) {
+        final idx = tasks.indexWhere((t) => t.id == task.id);
+        if (idx != -1) {
+          tasks.removeAt(idx);
+          await _saveLocalCache();
+          _refreshAnalyticsFromTasks();
+        }
         await _addToOfflineQueue('delete', {'id': task.id});
       } else {
         await api.deleteTask(task.id);
-        // Full server sync in background
-        _reloadData();
+        await _reloadData();
       }
     });
   }
@@ -1019,10 +1022,19 @@ class AppState extends ChangeNotifier {
   Future<void> clearCompletedHistory() async {
     await _guard(() async {
       final completed = tasks.where((t) => t.isCompleted).toList();
+
+      // Update local state immediately
+      tasks.removeWhere((t) => t.isCompleted);
+      _refreshAnalyticsFromTasks();
+      auditLogs = [];
+      await _saveLocalCache();
+
       for (final t in completed) {
         try {
           if (!isOffline) {
             await api.deleteTask(t.id);
+          } else {
+            await _addToOfflineQueue('delete', {'id': t.id});
           }
         } catch (e) {
           debugPrint('AppState: Failed to delete completed task ${t.id}: $e');
@@ -1036,7 +1048,6 @@ class AppState extends ChangeNotifier {
       } catch (e) {
         debugPrint('AppState: Failed to clear audit logs: $e');
       }
-      auditLogs = [];
 
       try {
         if (!isOffline) {
@@ -1044,13 +1055,6 @@ class AppState extends ChangeNotifier {
         }
       } catch (e) {
         debugPrint('AppState: Failed to reset analytics: $e');
-      }
-      analytics = _calculateFallbackAnalytics([]);
-
-      try {
-        await _notifications.cancelAll();
-      } catch (e) {
-        debugPrint('AppState: Failed to cancel notifications: $e');
       }
 
       try {
@@ -1083,15 +1087,19 @@ class AppState extends ChangeNotifier {
 
   Future<void> clearAllHistory() async {
     await _guard(() async {
-      if (!isOffline) {
-        await api.clearAllTasks();
-      }
-      tasks = [];
-      analytics = null;
-      auditLogs = [];
-      await _saveLocalCache();
       await _notifications.cancelAll();
-      await _reloadData();
+
+      if (isOffline) {
+        tasks = [];
+        analytics = _calculateFallbackAnalytics([]);
+        auditLogs = [];
+        await _saveLocalCache();
+        _refreshAnalyticsFromTasks();
+        await _addToOfflineQueue('clear_all', {});
+      } else {
+        await api.clearAllTasks();
+        await _reloadData();
+      }
     });
   }
 
@@ -1388,6 +1396,18 @@ class AppState extends ChangeNotifier {
 
           // 1. Trigger in-app popup dialog via the stream
           _triggeredTaskController.add(task);
+
+          // 2. Trigger a real system/device notification
+          try {
+            await _notifications.showNotification(
+              id: task.id,
+              title: task.title,
+              body: 'Alarm: ${task.title} is due now!',
+              payload: 'task:${task.id}',
+            );
+          } catch (e) {
+            debugPrint('[Foreground Scheduler] Failed to show system notification: $e');
+          }
 
           // 3. Mark locally as triggered to avoid double fires
           tasks[i] = TaskItem(

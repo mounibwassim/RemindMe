@@ -1,6 +1,7 @@
 import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -15,7 +16,7 @@ class NotificationService {
   factory NotificationService() => _instance;
   NotificationService._internal();
 
-  static const String taskChannelId = 'remindme_task_alarms';
+  static const String taskChannelId = 'remindme_task_alarms_v3';
   static const String taskChannelName = 'Task alarms';
   static const String taskChannelDescription =
       'Exact RemindMe alerts for task deadlines';
@@ -25,6 +26,17 @@ class NotificationService {
 
   /// Guard: only initialize plugin once.
   bool _initialized = false;
+
+  static const MethodChannel _channel = MethodChannel('com.example.remindme/settings');
+
+  Future<void> openNotificationSettings() async {
+    if (kIsWeb) return;
+    try {
+      await _channel.invokeMethod('openNotificationSettings');
+    } catch (e) {
+      debugPrint('Failed to open settings: $e');
+    }
+  }
 
   static final Int64List _vibrationPattern =
       Int64List.fromList([0, 700, 250, 700, 250, 1000]);
@@ -146,9 +158,18 @@ class NotificationService {
     final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     if (androidPlugin != null) {
+      final currentlyEnabled = await androidPlugin.areNotificationsEnabled() ?? false;
       final granted = await androidPlugin.requestNotificationsPermission();
+      
       _isPermissionGranted = granted ?? false;
       debugPrint('[Notification] Permission granted: $_isPermissionGranted');
+      
+      if (!currentlyEnabled && granted != true) {
+        // Permission was denied or not granted, and notifications are disabled.
+        // Open system notification settings for this application.
+        await openNotificationSettings();
+      }
+      
       // Request exact alarm permission (opens system settings on Android 12+)
       await androidPlugin.requestExactAlarmsPermission();
     }
@@ -299,8 +320,15 @@ class NotificationService {
       web_notifier.cancelWebNotification(id);
       return;
     }
-    await _plugin.cancel(id.hashCode & 0x7FFFFFFF);
-    debugPrint('[Notification] Cancelled: ID $id');
+    try {
+      if (!_initialized) {
+        await init();
+      }
+      await _plugin.cancel(id.hashCode & 0x7FFFFFFF);
+      debugPrint('[Notification] Cancelled: ID $id');
+    } catch (e) {
+      debugPrint('[Notification] Cancel notification failed: $e');
+    }
   }
 
   Future<void> cancelAll() async {
@@ -308,6 +336,14 @@ class NotificationService {
       web_notifier.cancelAllWebNotifications();
       return;
     }
-    await _plugin.cancelAll();
+    try {
+      if (!_initialized) {
+        await init();
+      }
+      await _plugin.cancelAll();
+      debugPrint('[Notification] Cancelled all notifications');
+    } catch (e) {
+      debugPrint('[Notification] Cancel all notifications failed: $e');
+    }
   }
 }

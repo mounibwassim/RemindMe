@@ -207,8 +207,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   subtitle: 'Prompt the system to allow RemindMe notifications',
                   onTap: () async {
                     await state.requestNotificationPermissions();
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
                         content: Text(state.isNotificationPermissionGranted
                             ? 'Notifications permission granted.'
                             : 'Notifications permission not granted.'),
@@ -224,8 +224,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () async {
                     await state.requestNotificationPermissions();
                     await state.sendTestNotification();
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                         content: Text('Test notification sent (check device).'),
                       ));
                     }
@@ -238,8 +238,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onTap: () async {
                     await state.requestNotificationPermissions();
                     await state.sendTestScheduledNotification();
-                    if (ctx.mounted) {
-                      ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
                         content: Text('5s test alarm scheduled.'),
                       ));
                     }
@@ -563,9 +563,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () async {
+              // Close dialog first so we don't attempt to use a deactivated
+              // dialog context after awaiting network/IO work.
+              Navigator.pop(ctx);
               try {
                 await state.clearAllHistory();
-                Navigator.pop(ctx);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('All tasks cleared')));

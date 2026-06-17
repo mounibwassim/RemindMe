@@ -56,7 +56,8 @@ class TasksScreen extends StatelessWidget {
               color: colors.primaryContainer.withValues(alpha: 0.2),
               shape: BoxShape.circle,
             ),
-            child: Icon(Icons.task_alt_rounded, size: 80, color: colors.primary.withValues(alpha: 0.6)),
+            child: Icon(Icons.task_alt_rounded,
+                size: 80, color: colors.primary.withValues(alpha: 0.6)),
           ).animate().scale(duration: 600.ms, curve: Curves.elasticOut),
           const SizedBox(height: 24),
           Text(
@@ -127,7 +128,8 @@ class _TaskCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(22),
             boxShadow: [
               BoxShadow(
-                color: (isOverdue ? colors.error : priorityColor).withValues(alpha: 0.08),
+                color: (isOverdue ? colors.error : priorityColor)
+                    .withValues(alpha: 0.08),
                 blurRadius: 24,
                 spreadRadius: -4,
                 offset: const Offset(0, 12),
@@ -140,12 +142,15 @@ class _TaskCard extends StatelessWidget {
               children: [
                 // ── Priority Strip ──────────────────────────────────────
                 Positioned(
-                  left: 0, top: 0, bottom: 0,
+                  left: 0,
+                  top: 0,
+                  bottom: 0,
                   child: Container(
                     width: 6,
                     decoration: BoxDecoration(
                       color: isOverdue ? colors.error : priorityColor,
-                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(20)),
+                      borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(20)),
                     ),
                   ),
                 ),
@@ -175,29 +180,57 @@ class _TaskCard extends StatelessWidget {
                                   Row(
                                     children: [
                                       Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 2),
                                         decoration: BoxDecoration(
-                                          color: task.displayStatus == 'Missed' 
-                                            ? colors.error.withValues(alpha: 0.1)
-                                            : task.displayStatus == 'Due Now'
-                                              ? Colors.orange.withValues(alpha: 0.1)
-                                              : colors.surfaceContainerHighest.withValues(alpha: 0.5),
-                                          borderRadius: BorderRadius.circular(6),
+                                          color: task.displayStatus == 'Missed'
+                                              ? colors.error
+                                                  .withValues(alpha: 0.1)
+                                              : task.displayStatus == 'Due Now'
+                                                  ? Colors.orange
+                                                      .withValues(alpha: 0.1)
+                                                  : colors
+                                                      .surfaceContainerHighest
+                                                      .withValues(alpha: 0.5),
+                                          borderRadius:
+                                              BorderRadius.circular(6),
                                         ),
                                         child: Row(
                                           children: [
                                             Icon(
-                                              task.displayStatus == 'Missed' ? Icons.warning_amber_rounded : Icons.timer_outlined,
+                                              task.displayStatus == 'Missed'
+                                                  ? Icons.warning_amber_rounded
+                                                  : Icons.timer_outlined,
                                               size: 12,
-                                              color: task.displayStatus == 'Missed' ? colors.error : task.displayStatus == 'Due Now' ? Colors.orange : colors.onSurfaceVariant.withValues(alpha: 0.7),
+                                              color: task.displayStatus ==
+                                                      'Missed'
+                                                  ? colors.error
+                                                  : task.displayStatus ==
+                                                          'Due Now'
+                                                      ? Colors.orange
+                                                      : colors.onSurfaceVariant
+                                                          .withValues(
+                                                              alpha: 0.7),
                                             ),
                                             const SizedBox(width: 4),
                                             Text(
-                                              task.displayStatus == 'Missed' ? 'Missed' : task.displayStatus == 'Due Now' ? 'Due Now' : due,
+                                              task.displayStatus == 'Missed'
+                                                  ? 'Missed'
+                                                  : task.displayStatus ==
+                                                          'Due Now'
+                                                      ? 'Due Now'
+                                                      : due,
                                               style: GoogleFonts.outfit(
                                                 fontSize: 11,
                                                 fontWeight: FontWeight.w800,
-                                                color: task.displayStatus == 'Missed' ? colors.error : task.displayStatus == 'Due Now' ? Colors.orange : colors.onSurfaceVariant,
+                                                color: task.displayStatus ==
+                                                        'Missed'
+                                                    ? colors.error
+                                                    : task.displayStatus ==
+                                                            'Due Now'
+                                                        ? Colors.orange
+                                                        : colors
+                                                            .onSurfaceVariant,
                                               ),
                                             ),
                                           ],
@@ -216,19 +249,23 @@ class _TaskCard extends StatelessWidget {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
-                          if (!isOverdue && !task.isMissed && task.displayStatus != 'Missed') ...[
+                          if (!isOverdue &&
+                              !task.isMissed &&
+                              task.displayStatus != 'Missed') ...[
                             _QuickAction(
                               icon: Icons.snooze_rounded,
                               label: 'Snooze',
                               color: colors.primary,
-                              onTap: () => _showSnoozeMenu(context, state, task),
+                              onTap: () =>
+                                  _showSnoozeMenu(context, state, task),
                             ),
                             const SizedBox(width: 12),
                           ],
                           _QuickAction(
                             icon: Icons.delete_outline_rounded,
                             label: 'Delete',
-                            color: colors.onSurfaceVariant.withValues(alpha: 0.5),
+                            color:
+                                colors.onSurfaceVariant.withValues(alpha: 0.5),
                             onTap: () => state.deleteTask(task),
                           ),
                         ],
@@ -274,7 +311,8 @@ class _CompleteButton extends StatelessWidget {
       icon: Container(
         padding: const EdgeInsets.all(4),
         decoration: BoxDecoration(
-          border: Border.all(color: colors.primary.withValues(alpha: 0.5), width: 2),
+          border: Border.all(
+              color: colors.primary.withValues(alpha: 0.5), width: 2),
           shape: BoxShape.circle,
         ),
         child: Icon(Icons.check_rounded, size: 16, color: colors.primary),
@@ -296,12 +334,38 @@ void _showSnoozeMenu(BuildContext context, AppState state, TaskItem task) {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text('Snooze Task', style: GoogleFonts.outfit(fontWeight: FontWeight.w800, fontSize: 20)),
+          Text('Snooze Task',
+              style: GoogleFonts.outfit(
+                  fontWeight: FontWeight.w800, fontSize: 20)),
           const SizedBox(height: 16),
-          _SnoozeOption(label: '5 Minutes', icon: Icons.timer_outlined, onTap: () => {state.snoozeTask(task, 5), Navigator.pop(ctx)}),
-          _SnoozeOption(label: '10 Minutes', icon: Icons.timer_outlined, onTap: () => {state.snoozeTask(task, 10), Navigator.pop(ctx)}),
-          _SnoozeOption(label: '30 Minutes', icon: Icons.timer_outlined, onTap: () => {state.snoozeTask(task, 30), Navigator.pop(ctx)}),
-          _SnoozeOption(label: 'Tomorrow', icon: Icons.event_repeat_rounded, onTap: () => {state.snoozeTask(task, 1440), Navigator.pop(ctx)}),
+          _SnoozeOption(
+              label: '5 Minutes',
+              icon: Icons.timer_outlined,
+              onTap: () {
+                state.snoozeTask(task, 5);
+                Navigator.pop(ctx);
+              }),
+          _SnoozeOption(
+              label: '10 Minutes',
+              icon: Icons.timer_outlined,
+              onTap: () {
+                state.snoozeTask(task, 10);
+                Navigator.pop(ctx);
+              }),
+          _SnoozeOption(
+              label: '30 Minutes',
+              icon: Icons.timer_outlined,
+              onTap: () {
+                state.snoozeTask(task, 30);
+                Navigator.pop(ctx);
+              }),
+          _SnoozeOption(
+              label: 'Tomorrow',
+              icon: Icons.event_repeat_rounded,
+              onTap: () {
+                state.snoozeTask(task, 1440);
+                Navigator.pop(ctx);
+              }),
           const SizedBox(height: 16),
         ],
       ),
@@ -310,7 +374,8 @@ void _showSnoozeMenu(BuildContext context, AppState state, TaskItem task) {
 }
 
 class _SnoozeOption extends StatelessWidget {
-  const _SnoozeOption({required this.label, required this.icon, required this.onTap});
+  const _SnoozeOption(
+      {required this.label, required this.icon, required this.onTap});
   final String label;
   final IconData icon;
   final VoidCallback onTap;
@@ -428,7 +493,8 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
             decoration: InputDecoration(
               hintText: 'What needs to be done?',
               prefixIcon: const Icon(Icons.edit_note_rounded),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+              border:
+                  OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
             ),
           ),
           const SizedBox(height: 16),
@@ -448,12 +514,16 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
               ),
               child: Row(
                 children: [
-                  Icon(Icons.error_outline_rounded, color: colors.error, size: 20),
+                  Icon(Icons.error_outline_rounded,
+                      color: colors.error, size: 20),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
                       _error!,
-                      style: TextStyle(color: colors.onErrorContainer, fontSize: 13, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: colors.onErrorContainer,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600),
                     ),
                   ),
                 ],
@@ -467,10 +537,12 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                 setState(() => _error = 'Please enter a task title');
                 return;
               }
-              
+
               // Validate that the date is in the future
-              if (_due.isBefore(DateTime.now().subtract(const Duration(minutes: 1)))) {
-                setState(() => _error = 'Please select a future date and time!');
+              if (_due.isBefore(
+                  DateTime.now().subtract(const Duration(minutes: 1)))) {
+                setState(
+                    () => _error = 'Please select a future date and time!');
                 return;
               }
 
@@ -489,7 +561,11 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
               if (mounted) Navigator.pop(context);
             },
             child: state.isLoading
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white))
                 : Text(widget.task == null ? 'Create Task' : 'Save Changes'),
           ),
         ],
@@ -516,7 +592,8 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                 lastDate: DateTime.now().add(const Duration(days: 365)),
               );
               if (picked != null) {
-                setState(() => _due = DateTime(picked.year, picked.month, picked.day, _due.hour, _due.minute));
+                setState(() => _due = DateTime(picked.year, picked.month,
+                    picked.day, _due.hour, _due.minute));
               }
             },
           ),
@@ -534,7 +611,8 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                 initialEntryMode: TimePickerEntryMode.inputOnly,
               );
               if (picked != null) {
-                setState(() => _due = DateTime(_due.year, _due.month, _due.day, picked.hour, picked.minute));
+                setState(() => _due = DateTime(_due.year, _due.month, _due.day,
+                    picked.hour, picked.minute));
               }
             },
           ),
@@ -547,19 +625,33 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Priority', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: colors.primary)),
+        Text('Priority',
+            style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: colors.primary)),
         const SizedBox(height: 8),
         SegmentedButton<int>(
           segments: const [
-            ButtonSegment(value: 1, label: Text('High'), icon: Icon(Icons.priority_high_rounded, size: 16)),
-            ButtonSegment(value: 2, label: Text('Med'), icon: Icon(Icons.remove_rounded, size: 16)),
-            ButtonSegment(value: 3, label: Text('Low'), icon: Icon(Icons.low_priority_rounded, size: 16)),
+            ButtonSegment(
+                value: 1,
+                label: Text('High'),
+                icon: Icon(Icons.priority_high_rounded, size: 16)),
+            ButtonSegment(
+                value: 2,
+                label: Text('Med'),
+                icon: Icon(Icons.remove_rounded, size: 16)),
+            ButtonSegment(
+                value: 3,
+                label: Text('Low'),
+                icon: Icon(Icons.low_priority_rounded, size: 16)),
           ],
           selected: {_priority},
           onSelectionChanged: (set) => setState(() => _priority = set.first),
           showSelectedIcon: false,
           style: SegmentedButton.styleFrom(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           ),
         ),
       ],
@@ -586,7 +678,11 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Category', style: GoogleFonts.montserrat(fontWeight: FontWeight.w700, fontSize: 13, color: colors.primary)),
+        Text('Category',
+            style: GoogleFonts.montserrat(
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                color: colors.primary)),
         const SizedBox(height: 8),
         SizedBox(
           height: 40,
@@ -607,7 +703,8 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                 ),
                 selectedColor: colors.primary,
                 backgroundColor: colors.surfaceContainerHighest,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10)),
               );
             },
           ),
@@ -618,7 +715,11 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
 }
 
 class _EditorTile extends StatelessWidget {
-  const _EditorTile({required this.label, required this.value, this.icon, required this.onTap});
+  const _EditorTile(
+      {required this.label,
+      required this.value,
+      this.icon,
+      required this.onTap});
   final String label, value;
   final IconData? icon;
   final VoidCallback onTap;
@@ -634,12 +735,17 @@ class _EditorTile extends StatelessWidget {
         decoration: BoxDecoration(
           color: colors.surfaceContainerHighest.withValues(alpha: 0.5),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
+          border:
+              Border.all(color: colors.outlineVariant.withValues(alpha: 0.5)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: colors.onSurfaceVariant)),
+            Text(label,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: colors.onSurfaceVariant)),
             const SizedBox(height: 4),
             Row(
               children: [
@@ -647,7 +753,8 @@ class _EditorTile extends StatelessWidget {
                   Icon(icon, size: 16, color: colors.primary),
                   const SizedBox(width: 8),
                 ],
-                Text(value, style: const TextStyle(fontWeight: FontWeight.w700)),
+                Text(value,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
               ],
             ),
           ],

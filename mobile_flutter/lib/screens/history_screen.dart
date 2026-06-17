@@ -59,9 +59,11 @@ class HistoryScreen extends StatelessWidget {
               onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           FilledButton(
             onPressed: () async {
+              // Close dialog first to avoid using a deactivated dialog context
+              // after awaiting async work.
+              Navigator.pop(ctx);
               try {
                 await state.clearCompletedHistory();
-                Navigator.pop(ctx);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('Completed tasks cleared')));

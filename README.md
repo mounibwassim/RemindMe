@@ -16,7 +16,7 @@ A production-grade, highly resilient **AI-Powered Task Reminder Application** mi
 ### 1. 🤖 AI-Powered Hybrid Task Assistant
 * **Natural Language Parsing**: Schedule reminders naturally. E.g., *"gym tomorrow at 8 am with high priority"* or *"cancel the study session next Monday"*.
 * **Local-First NLP Parser**: Fast, offline regex-based parsing matches common day/time formats instantly without sending data to external APIs.
-* **Gemini 1.5 Flash Fallback**: For complex requests, the system calls the Google Gemini API to extract high-accuracy dates, times, and scheduling intent.
+* **Gemini 2.5 Flash Fallback**: For complex requests, the system calls the Google Gemini API to extract high-accuracy dates, times, and scheduling intent.
 * **Smart Auto-Categorization**: Automatically categorizes tasks based on text keywords into **11 categories**: *Gym, Study, Work, Health, Finance, Call, Family, Social, Home, Gaming, or Birthday*.
 * **Safety Checks**: Rejects past-dated task creation and guides the user to schedule future-aware tasks.
 * **Weekly & Monthly Insights**: Generates motivational productivity insights based on task completion trends via Gemini.
@@ -42,6 +42,7 @@ A production-grade, highly resilient **AI-Powered Task Reminder Application** mi
 * **Material 3 Design**: Fully responsive screens, including Login, Home, Tasks, Calendar, Dashboard, History, Audit Logs, AI Assistant, and Settings.
 * **Custom Calendar Picker**: Interactive custom MDDialog calendar/time pickers customized for mobile screen framing (supports AM/PM and year-month selector).
 * **Multi-Theme Support**: Instant switching between Light Mode, Dark Mode, and System Default.
+* **System Notification Integration**: Seamless redirection to Android's system notification channel settings if permissions are denied, along with test alarm triggers.
 
 ---
 
@@ -74,7 +75,7 @@ RemindMe/
 ├── backend/                 # Shared Core Python Library
 │   ├── supabase_service.py  # Supabase client execution (CRUD for tasks, logs, analytics)
 │   ├── supabase_auth.py     # Auth integrations and password reset fallback
-│   ├── ai_assistant.py      # Local + Gemini 1.5 Flash parser logic
+│   ├── ai_assistant.py      # Local + Gemini 2.5 Flash parser logic
 │   ├── email_service.py     # SMTP Gmail client for OTP dispatch
 │   ├── otp_store.py         # In-memory storage for auth verification codes
 │   ├── crypto.py            # Local AES encryption utilities

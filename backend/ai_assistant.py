@@ -1,11 +1,12 @@
 import requests
 import json
 import re
+import os
 from datetime import datetime, timedelta
 
 # --- GLOBALS ---
-GEMINI_API_KEY = "AIzaSyBtoR3GqjwcRRXv68Ij9LnB8BETbPEvBco"
-GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyBtoR3GqjwcRRXv68Ij9LnB8BETbPEvBco")
+GEMINI_URL = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
 
 # Use a highly specific, clean help message
 OFF_TRACK_MSG = 'I\'m your RemindMe Assistant! 📋\nTell me a task to schedule — try something like:\n• "study tomorrow at 6 pm"\n• "gym on Friday at 8 am"\n• "meeting next Monday at 10 am"'
@@ -367,6 +368,10 @@ def _call_gemini(prompt: str):
             with open("gemini_debug.log", "a", encoding="utf-8") as f:
                 f.write(f"--- RESPONSE ---\n{res}\n")
             return res
+        else:
+            with open("gemini_debug.log", "a", encoding="utf-8") as f:
+                f.write(f"--- ERROR RESPONSE ({r.status_code}) ---\n{r.text}\n")
+            print(f"Gemini API Error {r.status_code}: {r.text}")
     except Exception as e:
         with open("gemini_debug.log", "a", encoding="utf-8") as f:
             f.write(f"--- ERROR ---\n{e}\n")
