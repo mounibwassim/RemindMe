@@ -34,3 +34,5 @@ mobile_flutter/.packages
 .DS_Store
 Thumbs.db
 key.properties
+*.keystore
+remindme-release-key.keystore
